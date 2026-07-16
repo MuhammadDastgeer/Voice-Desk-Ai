@@ -4,7 +4,8 @@ import {
   BarChart3, Calendar, MessageSquare, Settings, Users, FolderKanban, 
   HelpCircle, Code, LogOut, ChevronRight, Plus, Search, Filter, 
   TrendingUp, Play, Edit, Trash2, CheckCircle2, Clock, MapPin, 
-  Mail, Phone, RefreshCw, Star, Info, ShieldAlert, Sparkles, X, ChevronDown, Check
+  Mail, Phone, RefreshCw, Star, Info, ShieldAlert, Sparkles, X, ChevronDown, Check,
+  Sliders, Eye
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Appointment, Conversation, AIAgent, Service, FAQ, WidgetConfig, BusinessProfile, BusinessHours } from '../types';
@@ -59,6 +60,8 @@ export default function Dashboard({
   // Agent configurations / Studio tab selection
   const [selectedAgentForStudio, setSelectedAgentForStudio] = useState<AIAgent | null>(agents[0] || null);
   const [studioSubTab, setStudioSubTab] = useState<'configure' | 'test'>('configure');
+  const [agentSubTab, setAgentSubTab] = useState<'list' | 'studio' | 'edit'>('list');
+  const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
 
   // Form states
   const [newApt, setNewApt] = useState<Partial<Appointment>>({
@@ -1374,127 +1377,230 @@ export default function Dashboard({
             <motion.div 
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-1 lg:grid-cols-12 gap-6"
+              className="space-y-6"
             >
               
-              {/* Left Agents List */}
-              <div className="lg:col-span-4 bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-5 flex flex-col justify-between shadow-2xl">
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h4 className="text-white font-extrabold text-sm tracking-tight">AI Voice Agents</h4>
-                      <p className="text-[10px] text-[#94A3B8]">Manage receptionist presets</p>
+              {/* Inner Sub Tabs or Header depending on sub-tab */}
+              {agentSubTab !== 'list' && (
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => {
+                      setAgentSubTab('list');
+                      setEditingAgent(null);
+                    }}
+                    className="text-xs text-[#3B82F6] hover:text-white font-bold flex items-center gap-1 transition-colors cursor-pointer bg-[#3B82F6]/10 px-3 py-1.5 rounded-lg border border-[#3B82F6]/25"
+                  >
+                    ← Back to Agents List
+                  </button>
+                  <span className="text-[10px] text-[#3B82F6] bg-[#3B82F6]/10 px-2.5 py-1.5 rounded border border-[#3B82F6]/25 uppercase tracking-wider font-extrabold font-mono">
+                    {agentSubTab === 'studio' ? 'Agent Studio' : 'Edit Agent'}
+                  </span>
+                </div>
+              )}
+
+              {agentSubTab === 'list' && (
+                /* FULL PAGE AGENTS LIST */
+                <motion.div 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-6 flex flex-col justify-between shadow-2xl"
+                >
+                  <div>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                      <div>
+                        <h4 className="text-[#F8FAFC] font-extrabold text-base tracking-tight">AI Receptionist Voice Agents</h4>
+                        <p className="text-[11px] text-[#94A3B8]">Manage presets, deploy custom behavioral parameters, and test interactive speech flows</p>
+                      </div>
+                      
+                      <motion.button 
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setShowAgentModal(true)}
+                        className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md shadow-[#3B82F6]/20 transition-all"
+                      >
+                        <Plus className="w-4 h-4 stroke-[3]" /> Add New Agent
+                      </motion.button>
                     </div>
-                    <motion.button 
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => setShowAgentModal(true)}
-                      className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer shadow-md shadow-[#3B82F6]/20 transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[3]" /> New Agent
-                    </motion.button>
-                  </div>
- 
-                  <div className="space-y-3">
-                    {agents.map((agt) => {
-                      const isSelected = selectedAgentForStudio?.id === agt.id;
-                      return (
-                        <motion.div 
-                          whileHover={{ scale: 1.01 }}
-                          key={agt.id}
-                          onClick={() => {
-                            setSelectedAgentForStudio(agt);
-                            setStudioSubTab('configure');
-                          }}
-                          className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                            isSelected 
-                              ? 'bg-[#020617] border-[#3B82F6]/40 shadow-md shadow-[#3B82F6]/10' 
-                              : 'bg-[#020617]/40 border-[#1F2937] hover:bg-[#020617] hover:border-[#1F2937]'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                                isSelected ? 'bg-[#3B82F6]/20 text-[#3B82F6]' : 'bg-[#111827] text-[#94A3B8]'
-                              }`}>
-                                <Volume2Icon className="w-4.5 h-4.5" />
-                              </div>
-                              <div>
-                                <h5 className="text-white font-extrabold text-xs flex items-center gap-1.5">
-                                  {agt.name}
-                                  {agt.isActive && (
-                                    <span className="bg-[#3B82F6]/10 text-[#3B82F6] text-[9px] px-2 py-0.5 rounded-full font-mono font-bold border border-[#3B82F6]/20">
-                                      Active
+
+                    {/* Agents Table List - Full Width */}
+                    <div className="overflow-x-auto rounded-xl border border-[#1F2937]">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-[#020617] text-[#94A3B8] border-b border-[#1F2937]">
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Agent Profile</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Voice Model</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Personality</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Interruption Sensitivity</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Status</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Quick Active Status</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#1F2937]/60">
+                          {agents.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="p-12 text-center text-[#94A3B8] italic bg-[#020617]/30">
+                                No agents configured. Click "Add New Agent" to create one.
+                              </td>
+                            </tr>
+                          ) : (
+                            agents.map((agt) => {
+                              return (
+                                <motion.tr 
+                                  whileHover={{ backgroundColor: "rgba(59, 130, 246, 0.02)" }}
+                                  key={agt.id} 
+                                  className="transition-colors text-white"
+                                >
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className={`w-7.5 h-7.5 rounded-full flex items-center justify-center transition-colors ${
+                                        agt.isActive ? 'bg-[#3B82F6]/20 text-[#3B82F6] border border-[#3B82F6]/30' : 'bg-[#111827] text-[#94A3B8] border border-[#1F2937]'
+                                      }`}>
+                                        <Volume2Icon className="w-4 h-4" />
+                                      </div>
+                                      <div>
+                                        <span className="font-extrabold block text-white text-sm">{agt.name}</span>
+                                        <span className="text-[10px] text-[#94A3B8] font-mono">ID: {agt.id}</span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 font-mono text-gray-300">
+                                    {agt.voice}
+                                  </td>
+                                  <td className="p-4 text-gray-300 font-medium">
+                                    {agt.personality}
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-[#020617] border border-[#1F2937] text-gray-300">
+                                      {agt.interruptionSensitivity}
                                     </span>
-                                  )}
-                                </h5>
-                                <p className="text-[10px] text-[#94A3B8] mt-0.5 font-medium">Voice: {agt.voice.split(' - ')[0]}</p>
-                              </div>
-                            </div>
- 
-                            <motion.button 
-                              whileHover={{ scale: 1.1, color: "#f87171" }}
-                              whileTap={{ scale: 0.9 }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteAgent(agt.id);
-                              }}
-                              className="text-[#94A3B8] hover:text-red-400 p-1 rounded-lg hover:bg-[#020617] transition-all cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </motion.button>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center justify-center gap-1.5 w-24 mx-auto ${
+                                      agt.isActive 
+                                        ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/30' 
+                                        : 'bg-gray-900 text-[#94A3B8] border-gray-800'
+                                    }`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${agt.isActive ? 'bg-[#10B981]' : 'bg-gray-500'}`}></span>
+                                      {agt.isActive ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    {/* Beautiful Toggle Switch */}
+                                    <div className="flex items-center justify-center">
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const updated = agents.map(a => a.id === agt.id ? { ...a, isActive: !a.isActive } : a);
+                                          onUpdateAgents(updated);
+                                        }}
+                                        className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                                          agt.isActive ? 'bg-[#3B82F6]' : 'bg-gray-800 border border-[#1F2937]'
+                                        }`}
+                                      >
+                                        <motion.div 
+                                          layout
+                                          className="bg-white w-4 h-4 rounded-full shadow-md"
+                                          animate={{ x: agt.isActive ? 20 : 0 }}
+                                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                        />
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button 
+                                        onClick={() => {
+                                          setSelectedAgentForStudio(agt);
+                                          setAgentSubTab('studio');
+                                          setStudioSubTab('configure');
+                                        }}
+                                        className="bg-[#3B82F6]/15 hover:bg-[#3B82F6] text-[#3B82F6] hover:text-white px-2.5 py-1.5 rounded-lg border border-[#3B82F6]/30 hover:border-[#3B82F6] text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                                      >
+                                        <Sliders className="w-3 h-3" /> View Studio
+                                      </button>
+                                      <button 
+                                        onClick={() => {
+                                          setEditingAgent(agt);
+                                          setAgentSubTab('edit');
+                                        }}
+                                        className="bg-gray-950 hover:bg-gray-800 text-gray-300 hover:text-white p-1.5 rounded-lg border border-gray-800 hover:border-gray-700 transition-all cursor-pointer"
+                                        title="Edit Agent"
+                                      >
+                                        <Edit className="w-3 h-3" />
+                                      </button>
+                                      <button 
+                                        onClick={() => {
+                                          deleteAgent(agt.id);
+                                        }}
+                                        className="bg-red-950/20 hover:bg-red-600/20 text-red-400 p-1.5 rounded-lg border border-red-900/30 hover:border-red-500/30 transition-all cursor-pointer"
+                                        title="Delete Agent"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </motion.tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
- 
-                <div className="bg-[#020617] border border-[#1F2937] rounded-xl p-3.5 text-[10px] text-[#94A3B8] mt-6 font-medium leading-relaxed">
-                  💡 Select an AI voice agent on the left to edit its custom prompt rules or test it live.
-                </div>
-              </div>
- 
-              {/* Right Agent Studio detail */}
-              <div className="lg:col-span-8 bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-5 flex flex-col justify-between shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#3B82F6]/5 rounded-full blur-3xl pointer-events-none"></div>
-                {selectedAgentForStudio ? (
-                  <div className="h-full flex flex-col justify-between">
+
+                  <p className="text-[10px] text-[#94A3B8]/60 mt-6 italic">
+                    *Select "View Studio" to access full voice synthesis simulators, system instructions, and dynamic live tests. Toggle "Quick Active Status" to immediately toggle the agent's availability.
+                  </p>
+                </motion.div>
+              )}
+
+              {agentSubTab === 'studio' && selectedAgentForStudio && (
+                /* FULL PAGE STUDIO CONFIG + TEST LIVE */
+                <motion.div 
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-6 flex flex-col justify-between shadow-2xl relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-[#3B82F6]/5 rounded-full blur-3xl pointer-events-none"></div>
+                  
+                  <div className="h-full flex flex-col justify-between space-y-6">
                     <div>
-                      {/* Studio Header */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1F2937] pb-4 mb-5 gap-4">
+                      {/* Studio Header & Sub-tabs */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#1F2937] pb-4 gap-4">
                         <div>
-                          <span className="text-[9px] text-[#3B82F6] font-extrabold uppercase bg-[#3B82F6]/10 border border-[#3B82F6]/25 px-2 py-0.5 rounded font-mono">Agent Studio</span>
-                          <h3 className="text-white font-extrabold text-base mt-1.5">{selectedAgentForStudio.name}</h3>
+                          <span className="text-[9px] text-[#3B82F6] font-extrabold uppercase bg-[#3B82F6]/10 border border-[#3B82F6]/25 px-2 py-0.5 rounded font-mono">Agent Studio Workspace</span>
+                          <h3 className="text-white font-extrabold text-xl mt-1 font-display">{selectedAgentForStudio.name}</h3>
+                          <p className="text-xs text-[#94A3B8] font-medium mt-0.5">Voice Model: {selectedAgentForStudio.voice} • Personality: {selectedAgentForStudio.personality}</p>
                         </div>
- 
-                        {/* Sub-tabs switch */}
-                        <div className="bg-[#020617] p-1 rounded-xl border border-[#1F2937] flex text-xs">
+
+                        {/* Sub-tabs selector */}
+                        <div className="bg-[#020617] p-1.5 rounded-xl border border-[#1F2937] flex text-xs">
                           <button 
                             onClick={() => setStudioSubTab('configure')}
-                            className={`px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                              studioSubTab === 'configure' ? 'bg-[#111827] text-[#3B82F6] border border-[#1F2937]' : 'text-[#94A3B8] hover:text-gray-300'
+                            className={`px-5 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+                              studioSubTab === 'configure' ? 'bg-[#111827] text-[#3B82F6] border border-[#1F2937] font-extrabold' : 'text-[#94A3B8] hover:text-gray-300'
                             }`}
                           >
-                            Configure
+                            Configure Rules
                           </button>
                           <button 
                             onClick={() => setStudioSubTab('test')}
-                            className={`px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                              studioSubTab === 'test' ? 'bg-[#111827] text-[#3B82F6] border border-[#1F2937]' : 'text-[#94A3B8] hover:text-gray-300'
+                            className={`px-5 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+                              studioSubTab === 'test' ? 'bg-[#111827] text-[#3B82F6] border border-[#1F2937] font-extrabold' : 'text-[#94A3B8] hover:text-gray-300'
                             }`}
                           >
                             Test Live
                           </button>
                         </div>
                       </div>
- 
-                      {/* CONFIGURE AGENT DETAIL */}
+
+                      {/* CONFIGURE VIEW */}
                       {studioSubTab === 'configure' && (
-                        <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-850">
+                        <div className="space-y-6 mt-6 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-800">
                           
-                          {/* Name Input */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Top row fields */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                             <div>
                               <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Agent Name *</label>
                               <input 
@@ -1505,7 +1611,7 @@ export default function Dashboard({
                                   onUpdateAgents(updated);
                                   setSelectedAgentForStudio({ ...selectedAgentForStudio, name: e.target.value });
                                 }}
-                                className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-3 py-2 outline-none transition-all"
+                                className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-4 py-2.5 outline-none transition-all"
                               />
                             </div>
                             
@@ -1519,18 +1625,35 @@ export default function Dashboard({
                                   onUpdateAgents(updated);
                                   setSelectedAgentForStudio({ ...selectedAgentForStudio, interruptionSensitivity: val });
                                 }}
-                                className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                                className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
                               >
                                 <option value="Low">Low - Interruption disabled</option>
                                 <option value="Medium">Medium - Balanced natural turns</option>
                                 <option value="High">High - Instant interruption response</option>
                               </select>
                             </div>
-                          </div>
- 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
                             <div>
-                              <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Select Voice</label>
+                              <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Active Availability</label>
+                              <select 
+                                value={selectedAgentForStudio.isActive ? "true" : "false"}
+                                onChange={(e) => {
+                                  const val = e.target.value === "true";
+                                  const updated = agents.map(a => a.id === selectedAgentForStudio.id ? { ...a, isActive: val } : a);
+                                  onUpdateAgents(updated);
+                                  setSelectedAgentForStudio({ ...selectedAgentForStudio, isActive: val });
+                                }}
+                                className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                              >
+                                <option value="true">Active Receptionist</option>
+                                <option value="false">Inactive / Standby</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                              <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Select Voice Model</label>
                               <select 
                                 value={selectedAgentForStudio.voice}
                                 onChange={(e) => {
@@ -1539,7 +1662,7 @@ export default function Dashboard({
                                   onUpdateAgents(updated);
                                   setSelectedAgentForStudio({ ...selectedAgentForStudio, voice: val });
                                 }}
-                                className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                                className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
                               >
                                 <option value="Alloy - Neutral">Alloy - Neutral (Standard)</option>
                                 <option value="Alloy - Friendly & Warm">Alloy - Friendly & Warm</option>
@@ -1547,7 +1670,7 @@ export default function Dashboard({
                                 <option value="Shimmer - Sweet & Crisp">Shimmer - Sweet & Crisp</option>
                               </select>
                             </div>
- 
+
                             <div>
                               <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Select Personality Vibe</label>
                               <select 
@@ -1558,7 +1681,7 @@ export default function Dashboard({
                                   onUpdateAgents(updated);
                                   setSelectedAgentForStudio({ ...selectedAgentForStudio, personality: val });
                                 }}
-                                className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                                className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
                               >
                                 <option value="Professional">Professional & Courteous</option>
                                 <option value="Professional & Empathetic">Professional & Empathetic</option>
@@ -1567,29 +1690,29 @@ export default function Dashboard({
                               </select>
                             </div>
                           </div>
- 
+
                           {/* Greeting Message */}
                           <div>
                             <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Greeting Message *</label>
                             <textarea 
-                              rows={2}
+                              rows={3}
                               value={selectedAgentForStudio.greetingMessage}
                               onChange={(e) => {
                                 const val = e.target.value;
                                 const updated = agents.map(a => a.id === selectedAgentForStudio.id ? { ...a, greetingMessage: val } : a);
-                                  onUpdateAgents(updated);
-                                  setSelectedAgentForStudio({ ...selectedAgentForStudio, greetingMessage: val });
+                                onUpdateAgents(updated);
+                                setSelectedAgentForStudio({ ...selectedAgentForStudio, greetingMessage: val });
                               }}
-                              className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-3 py-2 outline-none transition-all"
+                              className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-4 py-3 outline-none transition-all leading-relaxed"
                             />
-                            <span className="text-[9px] text-[#94A3B8]/60 block mt-1">The first sentence the AI speaks when the customer answers the call.</span>
+                            <span className="text-[9.5px] text-[#94A3B8]/60 block mt-1.5 font-medium">The first sentence the AI speaks when answering incoming customer calls.</span>
                           </div>
- 
+
                           {/* System Prompt Instructions */}
                           <div>
-                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">System Prompt Rules</label>
+                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">System Prompt & Behavioral Rules</label>
                             <textarea 
-                              rows={4}
+                              rows={6}
                               value={selectedAgentForStudio.systemPrompt}
                               onChange={(e) => {
                                 const val = e.target.value;
@@ -1597,20 +1720,20 @@ export default function Dashboard({
                                 onUpdateAgents(updated);
                                 setSelectedAgentForStudio({ ...selectedAgentForStudio, systemPrompt: val });
                               }}
-                              className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-3 py-2 font-mono outline-none transition-all"
+                              className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-4 py-3 font-mono outline-none transition-all leading-relaxed"
                             />
-                            <span className="text-[9px] text-[#94A3B8]/60 block mt-1">Strict behavioural directives for the receptionist. Use lists for guidelines.</span>
+                            <span className="text-[9.5px] text-[#94A3B8]/60 block mt-1.5 font-medium">Define strict guidelines on how the receptionist handles questions, pitches oil changes, checkups, pricing, and schedules.</span>
                           </div>
- 
+
                         </div>
                       )}
- 
-                      {/* TEST LIVE DYNAMIC DIALER */}
+
+                      {/* TEST LIVE VIEW */}
                       {studioSubTab === 'test' && (
-                        <div className="space-y-4 max-w-md mx-auto py-2">
-                          <div className="bg-[#3B82F6]/10 border border-[#3B82F6]/15 rounded-xl p-4 mb-2 text-center text-xs">
-                            <span className="text-[#3B82F6] font-extrabold block mb-1 text-sm tracking-tight">🎙 Live Agent Tester</span>
-                            <span className="text-[#94A3B8]">You can interact with your newly adjusted </span><span className="text-white font-bold">{selectedAgentForStudio.name}</span><span className="text-[#94A3B8]"> instantly below.</span>
+                        <div className="space-y-6 mt-6 max-w-lg mx-auto py-4">
+                          <div className="bg-[#3B82F6]/10 border border-[#3B82F6]/15 rounded-2xl p-4 text-center text-xs">
+                            <span className="text-[#3B82F6] font-extrabold block mb-1 text-sm tracking-tight">🎙 Live Voice Receptionist Sandbox</span>
+                            <p className="text-[#94A3B8]">Interact directly with <span className="text-white font-extrabold">{selectedAgentForStudio.name}</span> instantly. Speak into your microphone or type replies below.</p>
                           </div>
                           
                           <DialerSim 
@@ -1620,36 +1743,207 @@ export default function Dashboard({
                           />
                         </div>
                       )}
- 
+
                     </div>
- 
+
                     {/* Bottom Save actions */}
                     {studioSubTab === 'configure' && (
-                      <div className="pt-4 border-t border-[#1F2937] mt-4 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+                      <div className="pt-4 border-t border-[#1F2937] mt-6 flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
                         <div className="flex items-center gap-2 text-xs text-[#94A3B8]">
                           <Info className="w-4 h-4 text-[#3B82F6] animate-pulse" />
-                          <span className="font-medium">Any change is saved dynamically in your local storage.</span>
+                          <span className="font-medium">All parameters sync automatically in your secure local session.</span>
                         </div>
+                        <div className="flex gap-3">
+                          <button 
+                            onClick={() => {
+                              setAgentSubTab('list');
+                            }}
+                            className="bg-transparent hover:bg-gray-800 text-[#94A3B8] hover:text-white px-5 py-2.5 rounded-xl text-xs font-bold border border-[#1F2937] transition-all cursor-pointer"
+                          >
+                            Back to List
+                          </button>
+                          <motion.button 
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => {
+                              alert("Configurations updated and deployed successfully!");
+                              setAgentSubTab('list');
+                            }}
+                            className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl cursor-pointer shadow-md shadow-[#3B82F6]/25 transition-all"
+                          >
+                            Save & Return to Agents
+                          </motion.button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {agentSubTab === 'edit' && editingAgent && (
+                /* FULL PAGE DETAILED EDIT FORM */
+                <motion.div 
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-6 flex flex-col justify-between shadow-2xl relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-[#3B82F6]/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                  <div className="h-full flex flex-col justify-between space-y-6">
+                    <div>
+                      {/* Edit Header */}
+                      <div className="border-b border-[#1F2937] pb-4">
+                        <span className="text-[9px] text-[#3B82F6] font-extrabold uppercase bg-[#3B82F6]/10 border border-[#3B82F6]/25 px-2 py-0.5 rounded font-mono">Agent Editor Mode</span>
+                        <h3 className="text-white font-extrabold text-xl mt-1 font-display">Configure {editingAgent.name}</h3>
+                        <p className="text-xs text-[#94A3B8]">Full panel to alter core receptionist behavior, speech profile, greeting sequences and prompt overrides</p>
+                      </div>
+
+                      {/* Editing Fields Form */}
+                      <div className="space-y-6 mt-6 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-800">
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                          <div>
+                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Agent Name *</label>
+                            <input 
+                              type="text" 
+                              value={editingAgent.name}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, name: e.target.value })}
+                              className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-4 py-2.5 outline-none transition-all"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Interruption Sensitivity</label>
+                            <select 
+                              value={editingAgent.interruptionSensitivity}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, interruptionSensitivity: e.target.value as any })}
+                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                            >
+                              <option value="Low">Low - Interruption disabled</option>
+                              <option value="Medium">Medium - Balanced natural turns</option>
+                              <option value="High">High - Instant interruption response</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Active Agent Status</label>
+                            <div className="flex items-center gap-3 bg-[#020617] border border-[#1F2937] rounded-xl px-4 py-2 h-[38px]">
+                              <button 
+                                type="button"
+                                onClick={() => setEditingAgent({ ...editingAgent, isActive: !editingAgent.isActive })}
+                                className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                                  editingAgent.isActive ? 'bg-[#3B82F6]' : 'bg-gray-800 border border-[#1F2937]'
+                                }`}
+                              >
+                                <motion.div 
+                                  layout
+                                  className="bg-white w-4 h-4 rounded-full shadow-md"
+                                  animate={{ x: editingAgent.isActive ? 20 : 0 }}
+                                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                />
+                              </button>
+                              <span className="text-xs font-bold text-gray-300">
+                                {editingAgent.isActive ? 'Active on Dashboard' : 'Standby / Inactive'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div>
+                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Select Voice Model</label>
+                            <select 
+                              value={editingAgent.voice}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, voice: e.target.value })}
+                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                            >
+                              <option value="Alloy - Neutral">Alloy - Neutral (Standard)</option>
+                              <option value="Alloy - Friendly & Warm">Alloy - Friendly & Warm</option>
+                              <option value="Echo - Resonant Deep">Echo - Resonant Deep</option>
+                              <option value="Shimmer - Sweet & Crisp">Shimmer - Sweet & Crisp</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Select Personality Vibe</label>
+                            <select 
+                              value={editingAgent.personality}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, personality: e.target.value })}
+                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                            >
+                              <option value="Professional">Professional & Courteous</option>
+                              <option value="Professional & Empathetic">Professional & Empathetic</option>
+                              <option value="Casual & Friendly">Casual & Friendly</option>
+                              <option value="Direct & Efficient">Direct & Efficient</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Greeting Message */}
+                        <div>
+                          <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Greeting Message *</label>
+                          <textarea 
+                            rows={3}
+                            value={editingAgent.greetingMessage}
+                            onChange={(e) => setEditingAgent({ ...editingAgent, greetingMessage: e.target.value })}
+                            className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-4 py-3 outline-none transition-all leading-relaxed"
+                          />
+                          <span className="text-[9.5px] text-[#94A3B8]/60 block mt-1.5 font-medium">The introductory phrase this agent speaks immediately upon customer pickup.</span>
+                        </div>
+
+                        {/* System Prompt Rules */}
+                        <div>
+                          <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">System Prompt & Instruction Overrides</label>
+                          <textarea 
+                            rows={6}
+                            value={editingAgent.systemPrompt}
+                            onChange={(e) => setEditingAgent({ ...editingAgent, systemPrompt: e.target.value })}
+                            className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-4 py-3 font-mono outline-none transition-all leading-relaxed"
+                          />
+                          <span className="text-[9.5px] text-[#94A3B8]/60 block mt-1.5 font-medium">Core rules the agent follows, such as matching services, lookup procedures, quoting repair estimates, etc.</span>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Form actions */}
+                    <div className="pt-4 border-t border-[#1F2937] mt-6 flex items-center justify-between">
+                      <p className="text-[10px] text-[#94A3B8]/60 italic">
+                        *Verify changes in live sandbox simulator once saved.
+                      </p>
+                      <div className="flex gap-3">
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setAgentSubTab('list');
+                            setEditingAgent(null);
+                          }}
+                          className="bg-[#020617] hover:bg-[#111827] text-[#94A3B8] hover:text-white px-5 py-2.5 rounded-xl text-xs font-bold border border-[#1F2937] transition-all cursor-pointer"
+                        >
+                          Cancel
+                        </button>
                         <motion.button 
                           whileHover={{ scale: 1.03 }}
                           whileTap={{ scale: 0.97 }}
                           onClick={() => {
-                            alert("Agent configurations successfully updated!");
+                            if (!editingAgent.name) return;
+                            const updated = agents.map(a => a.id === editingAgent.id ? editingAgent : a);
+                            onUpdateAgents(updated);
+                            setAgentSubTab('list');
+                            setEditingAgent(null);
+                            alert("Agent edits saved successfully!");
                           }}
-                          className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl cursor-pointer shadow-md shadow-[#3B82F6]/20 transition-colors"
+                          className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl cursor-pointer shadow-md shadow-[#3B82F6]/25 transition-all"
                         >
-                          Save Configuration
+                          Save Changes
                         </motion.button>
                       </div>
-                    )}
+                    </div>
+
                   </div>
-                ) : (
-                  <div className="text-center py-24 text-[#94A3B8]">
-                    Create an agent first.
-                  </div>
-                )}
-              </div>
- 
+                </motion.div>
+              )}
+
             </motion.div>
           )}
  
