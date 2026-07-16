@@ -1,0 +1,6 @@
+{
+  "name": "VoiceDesk AI",
+  "description": "An AI-powered voice receptionist platform for auto repair shops that answers calls, books appointments, and captures leads.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
