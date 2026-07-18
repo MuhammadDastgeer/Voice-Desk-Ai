@@ -568,6 +568,69 @@ export default function Dashboard({
     }
   };
 
+  // Direct OpenAI booking with robust parameters
+  const handleDirectOpenAIBooking = async (args: {
+    customerName: string;
+    phoneNumber: string;
+    vehicleYear: string;
+    vehicleMake: string;
+    vehicleModel: string;
+    serviceName: string;
+    scheduledAt: string;
+    notes: string;
+  }) => {
+    // Find service ID matching the user request
+    const matchingService = services.find(s => 
+      s.name.toLowerCase().includes(args.serviceName.toLowerCase()) ||
+      args.serviceName.toLowerCase().includes(s.name.toLowerCase())
+    ) || services[0];
+    
+    // Create new appointment object
+    const newAptObj: Appointment = {
+      id: '',
+      customerName: args.customerName,
+      phoneNumber: args.phoneNumber || '9999999999',
+      vehicleYear: args.vehicleYear || '2021',
+      vehicleMake: args.vehicleMake || 'Toyota',
+      vehicleModel: args.vehicleModel || 'Camry',
+      serviceId: matchingService ? matchingService.id : '',
+      scheduledAt: args.scheduledAt || 'Saturday 10:00 AM',
+      status: 'confirmed',
+      notes: args.notes || 'Booked via simulated live OpenAI voice receptionist'
+    };
+
+    try {
+      const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+      const savedApt = await supabaseService.saveAppointment(userId, newAptObj);
+      onUpdateAppointments([savedApt, ...appointments]);
+
+      // Add rich conversation to logs
+      const newConvObj: Conversation = {
+        id: `con-${Date.now()}`,
+        callerName: args.customerName,
+        callerPhone: args.phoneNumber || '9999999999',
+        status: 'completed',
+        duration: '2:15',
+        sentiment: 'positive',
+        appointmentBooked: true,
+        startedAt: 'Just now',
+        transcript: [
+          { sender: 'agent', text: 'Hello, how can I assist you today?', timestamp: '0:01' },
+          { sender: 'user', text: `I want to book an appointment.`, timestamp: '0:15' },
+          { sender: 'agent', text: `Sure, let's schedule that.`, timestamp: '0:35' },
+          { sender: 'user', text: `Great, my name is ${args.customerName} and my car is a ${args.vehicleYear} ${args.vehicleMake} ${args.vehicleModel}`, timestamp: '1:10' },
+          { sender: 'agent', text: `Awesome! Your booking is fully confirmed for ${args.scheduledAt}.`, timestamp: '2:00' }
+        ]
+      };
+
+      onUpdateConversations([newConvObj, ...conversations]);
+      setSelectedConv(newConvObj);
+    } catch (err) {
+      console.error('Error in direct OpenAI booking:', err);
+      throw err;
+    }
+  };
+
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden bg-[#0B1120] text-[#F8FAFC] font-sans flex flex-col md:flex-row relative overflow-hidden selection:bg-[#3B82F6] selection:text-white">
       
@@ -1738,7 +1801,11 @@ export default function Dashboard({
                           <DialerSim 
                             agentName={selectedAgentForStudio.name}
                             agentVoice={selectedAgentForStudio.voice}
+                            systemPrompt={selectedAgentForStudio.systemPrompt}
+                            greetingMessage={selectedAgentForStudio.greetingMessage}
+                            services={services}
                             onAppointmentBooked={handleDirectDialerBooking}
+                            onAppointmentBookedDirect={handleDirectOpenAIBooking}
                           />
                         </div>
                       )}
