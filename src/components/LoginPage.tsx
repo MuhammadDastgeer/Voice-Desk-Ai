@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { PhoneCall, Shield, Key, Mail, ArrowRight, Sparkles, Database, CheckCircle2, RefreshCw } from 'lucide-react';
+import { PhoneCall, Shield, Key, Mail, ArrowRight, Sparkles, Database, CheckCircle2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabaseService, SUPABASE_STATUS } from '../lib/supabase';
 
@@ -12,6 +12,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
   const [email, setEmail] = useState('demo@voicedesk.ai');
   const [password, setPassword] = useState('password123');
+  const [showPassword, setShowPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [mode, setMode] = useState<'login' | 'forgot_password'>('login');
   
@@ -219,14 +220,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                   <input
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="block w-full pl-11 pr-3 py-2.5 bg-gray-950/80 border border-gray-800 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+                    className="block w-full pl-11 pr-10 py-2.5 bg-gray-950/80 border border-gray-800 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20 transition-all"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#94A3B8] hover:text-emerald-400 transition-colors focus:outline-none cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 

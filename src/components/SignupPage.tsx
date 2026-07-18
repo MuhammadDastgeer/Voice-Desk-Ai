@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { PhoneCall, Shield, Key, Mail, Building, ArrowRight, User, Check, Database } from 'lucide-react';
+import { PhoneCall, Shield, Key, Mail, Building, ArrowRight, User, Check, Database, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabaseService, SUPABASE_STATUS } from '../lib/supabase';
 
@@ -15,6 +15,8 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -106,8 +108,8 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_70%,transparent_100%)] pointer-events-none opacity-40"></div>
       
       {/* Dynamic ambient blur orbs */}
-      <div className="absolute top-[5%] right-[15%] w-[450px] h-[450px] bg-emerald-500/10 rounded-full blur-[130px] pointer-events-none animate-pulse"></div>
-      <div className="absolute bottom-[5%] left-[15%] w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[130px] pointer-events-none"></div>
+      <div className="absolute top-[5%] left-[15%] w-[450px] h-[450px] bg-emerald-500/10 rounded-full blur-[130px] pointer-events-none animate-pulse"></div>
+      <div className="absolute bottom-[5%] right-[15%] w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[130px] pointer-events-none"></div>
 
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
@@ -250,13 +252,20 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min 6 characters"
-                  className="block w-full pl-11 pr-3 py-2 bg-gray-950/80 border border-gray-800 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+                  className="block w-full pl-11 pr-10 py-2 bg-gray-950/80 border border-gray-800 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20 transition-all"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#94A3B8] hover:text-emerald-400 transition-colors focus:outline-none cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -271,13 +280,20 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
-                  type="password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter password"
-                  className="block w-full pl-11 pr-3 py-2 bg-gray-950/80 border border-gray-800 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+                  className="block w-full pl-11 pr-10 py-2 bg-gray-950/80 border border-gray-800 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20 transition-all"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#94A3B8] hover:text-emerald-400 transition-colors focus:outline-none cursor-pointer"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 

@@ -138,12 +138,15 @@ export const supabaseService = {
     } else {
       // Sandbox Simulation
       // Check for demo user
-      if (email === 'demo@voicedesk.ai' && password === 'password123') {
-        const id = 'usr-demo';
-        localStorage.setItem('vd_current_user_id', id);
-        localStorage.setItem('vd_current_user_name', 'Demo Workshop');
-        localStorage.setItem('vd_current_user_email', 'demo@voicedesk.ai');
-        return { user: { id, email: 'demo@voicedesk.ai', user_metadata: { full_name: 'Demo Workshop' } }, error: null };
+      if (email === 'demo@voicedesk.ai') {
+        const demoPassword = localStorage.getItem('vd_demo_user_password') || 'password123';
+        if (password === demoPassword) {
+          const id = 'usr-demo';
+          localStorage.setItem('vd_current_user_id', id);
+          localStorage.setItem('vd_current_user_name', 'Demo Workshop');
+          localStorage.setItem('vd_current_user_email', 'demo@voicedesk.ai');
+          return { user: { id, email: 'demo@voicedesk.ai', user_metadata: { full_name: 'Demo Workshop' } }, error: null };
+        }
       }
 
       const users = getMockUsers();
@@ -190,6 +193,56 @@ export const supabaseService = {
     localStorage.removeItem('vd_current_user_name');
     localStorage.removeItem('vd_current_user_email');
     localStorage.setItem('vd_is_logged_in', 'false');
+  },
+
+  // 4b. Change Password
+  async changePassword(oldPassword: string, newPassword: string): Promise<boolean> {
+    if (isConfigured && supabase) {
+      const email = localStorage.getItem('vd_current_user_email');
+      if (!email) throw new Error('No active user logged in.');
+      
+      // Try signing in with the current email and old password to verify it is correct
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: oldPassword
+      });
+      if (signInError) {
+        throw new Error('Old password is incorrect.');
+      }
+      
+      // If sign in is successful, update the password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+      if (updateError) throw updateError;
+      return true;
+    } else {
+      // Sandbox simulation
+      const userId = localStorage.getItem('vd_current_user_id');
+      const email = localStorage.getItem('vd_current_user_email') || 'demo@voicedesk.ai';
+      
+      // If user is logged in as the standard demo user
+      if (email.toLowerCase() === 'demo@voicedesk.ai') {
+        const demoPassword = localStorage.getItem('vd_demo_user_password') || 'password123';
+        if (oldPassword !== demoPassword) {
+          throw new Error('Old password is incorrect.');
+        }
+        localStorage.setItem('vd_demo_user_password', newPassword);
+        return true;
+      }
+      
+      const users = getMockUsers();
+      const matched = users.find(u => u.id === userId || u.email.toLowerCase() === email.toLowerCase());
+      if (!matched) {
+        throw new Error('User not found.');
+      }
+      if (matched.password !== oldPassword) {
+        throw new Error('Old password is incorrect.');
+      }
+      matched.password = newPassword;
+      saveMockUsers(users);
+      return true;
+    }
   },
 
   // 5. Get current active user email/name
