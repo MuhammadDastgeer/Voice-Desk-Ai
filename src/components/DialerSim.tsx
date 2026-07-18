@@ -45,6 +45,7 @@ export default function DialerSim({
   services = [],
   onAppointmentBookedDirect
 }: DialerSimProps) {
+  const [simMode, setSimMode] = useState<'text' | 'voice'>('text');
   const [isCalling, setIsCalling] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [transcript, setTranscript] = useState<Message[]>([]);
@@ -70,6 +71,155 @@ export default function DialerSim({
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Keep track of simMode in a ref for callbacks
+  const simModeRef = useRef(simMode);
+  useEffect(() => {
+    simModeRef.current = simMode;
+    // Cancel any active TTS when switching to text mode
+    if (simMode === 'text') {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+    }
+  }, [simMode]);
+
+  // Speech Recognition Refs & States
+  const recognitionRef = useRef<any>(null);
+  const [isSpeechSupported, setIsSpeechSupported] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+
+  // Keep dynamic states in refs to prevent stale closures in event listeners
+  const isSpeakingRef = useRef(isSpeaking);
+  const isAiLoadingRef = useRef(isAiLoading);
+  const isMutedRef = useRef(isMuted);
+  const isCallingRef = useRef(isCalling);
+  const durationRef = useRef(duration);
+
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
+
+  useEffect(() => {
+    isAiLoadingRef.current = isAiLoading;
+  }, [isAiLoading]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    isCallingRef.current = isCalling;
+  }, [isCalling]);
+
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
+  // Handle message sender function stored in a ref to be accessible anywhere without stale closure
+  const handleSendMessageRef = useRef<(text: string) => void>(() => {});
+  
+  const handleSendMessage = (textToSend: string) => {
+    if (!textToSend.trim() || !isCalling) return;
+
+    const newMsg: Message = {
+      sender: 'user',
+      text: textToSend,
+      timestamp: formatDuration(durationRef.current)
+    };
+
+    setTranscript(prev => [...prev, newMsg]);
+    setInputText('');
+    handleAIResponse(textToSend);
+  };
+
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage;
+  }, [isCalling, bookingState, isLiveMode, apiMessages, openaiKey]);
+
+  // Initialize Speech Recognition once
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("Web Speech API is not supported in this browser.");
+      setIsSpeechSupported(false);
+      return;
+    }
+
+    const rec = new SpeechRecognition();
+    rec.continuous = true;
+    rec.interimResults = false;
+    // Set to handle english by default but with Urdu bilingual context
+    rec.lang = 'en-US'; 
+    
+    rec.onstart = () => {
+      setIsListening(true);
+    };
+
+    rec.onend = () => {
+      setIsListening(false);
+      // Auto-restart recognition if we're still in voice mode, on call, not speaking, and not muted
+      if (simModeRef.current === 'voice' && isCallingRef.current && !isMutedRef.current && !isSpeakingRef.current && !isAiLoadingRef.current) {
+        try {
+          rec.start();
+        } catch (e) {
+          // Already running or other minor err
+        }
+      }
+    };
+
+    rec.onresult = (event: any) => {
+      const lastResultIndex = event.results.length - 1;
+      const text = event.results[lastResultIndex][0].transcript;
+      if (text && text.trim()) {
+        console.log("Recognized live speech:", text);
+        // Guarantee no double feedback / agent listening to its own synthesized voice
+        if (simModeRef.current === 'voice' && !isSpeakingRef.current && !isAiLoadingRef.current && !isMutedRef.current) {
+          handleSendMessageRef.current(text);
+        }
+      }
+    };
+
+    rec.onerror = (event: any) => {
+      console.warn("Speech recognition error:", event.error);
+    };
+
+    recognitionRef.current = rec;
+
+    return () => {
+      try {
+        rec.abort();
+      } catch (e) {}
+    };
+  }, []);
+
+  // Monitor voice listening loop based on system state
+  useEffect(() => {
+    const rec = recognitionRef.current;
+    if (!rec || !isCalling || simMode !== 'voice') {
+      if (rec) {
+        try { rec.stop(); } catch(e) {}
+      }
+      return;
+    }
+
+    const shouldListen = !isMuted && !isSpeaking && !isAiLoading;
+
+    if (shouldListen) {
+      try {
+        rec.start();
+      } catch (e) {
+        // already started
+      }
+    } else {
+      try {
+        rec.stop();
+      } catch (e) {
+        // already stopped
+      }
+    }
+  }, [isCalling, isMuted, isSpeaking, isAiLoading, simMode]);
+
   // Sync temp key input if props or environments change
   useEffect(() => {
     setTempKeyInput(openaiKey);
@@ -77,6 +227,9 @@ export default function DialerSim({
 
   // Text-To-Speech function
   const speakText = (text: string) => {
+    if (simMode !== 'voice') {
+      return;
+    }
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -291,7 +444,8 @@ export default function DialerSim({
         `2. NEVER output markdown (like asterisks, bolding, bullet lists, or tables) because your text is read aloud by a Text-to-Speech engine. Send clear, plain sentences.\n` +
         `3. When a customer wants to book an appointment, ask for their name, phone number, vehicle details (year, make, model), and preferred date/time.\n` +
         `4. Once they provide the details and agree, call the 'book_appointment' tool to lock it in. Always confirm the appointment with the user after calling the tool.\n` +
-        `5. If they ask about services or pricing, use the context above to respond accurately.`;
+        `5. If they ask about services or pricing, use the context above to respond accurately.\n` +
+        `6. BILINGUAL SUPPORT: If the user speaks in Hindi, Urdu, Roman Urdu (Urdu written in English alphabets like 'rely ni da rah hai'), or English, you MUST respond in the exact same language/style! Keep the language simple, natural, and friendly so it is easy for them to converse.`;
 
       const initialHistory: APIMessage[] = [
         { role: 'system', content: systemInstructions },
@@ -393,20 +547,6 @@ export default function DialerSim({
     }, 800);
   };
 
-  const handleSendMessage = (textToSend: string) => {
-    if (!textToSend.trim() || !isCalling) return;
-
-    const newMsg: Message = {
-      sender: 'user',
-      text: textToSend,
-      timestamp: formatDuration(duration)
-    };
-
-    setTranscript(prev => [...prev, newMsg]);
-    setInputText('');
-    handleAIResponse(textToSend);
-  };
-
   const handleQuickPrompt = (prompt: string) => {
     handleSendMessage(prompt);
   };
@@ -467,6 +607,14 @@ export default function DialerSim({
           )}
         </div>
       </div>
+
+      {/* Mode Indicator */}
+      {!isCalling && !showKeyConfig && (
+        <div className="flex items-center justify-center gap-2 py-2 px-3 bg-gray-950/60 border border-gray-800 rounded-xl mb-4">
+          <MessageSquare className="w-3.5 h-3.5 text-[#3B82F6]" />
+          <span className="text-xs font-semibold text-gray-300">Text to Text Chat Mode</span>
+        </div>
+      )}
 
       {/* Body: Transcript, Calling Screen, or Settings */}
       <div className="flex-1 overflow-hidden flex flex-col">
@@ -545,14 +693,16 @@ export default function DialerSim({
               <div className="absolute inset-0 bg-[#3B82F6]/20 rounded-full blur-xl animate-pulse"></div>
               <button 
                 onClick={startCall}
-                className="w-20 h-20 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg shadow-[#3B82F6]/30 cursor-pointer relative z-10"
+                className="w-20 h-20 bg-gradient-to-r from-[#3B82F6] to-[#4F46E5] shadow-[#3B82F6]/30 hover:opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg cursor-pointer relative z-10"
               >
-                <Phone className="w-9 h-9 text-white fill-current" />
+                <MessageSquare className="w-9 h-9 text-white" />
               </button>
             </div>
-            <h4 className="text-white font-semibold text-lg mb-2">Simulate Live Voice Call</h4>
+            <h4 className="text-white font-semibold text-lg mb-2">
+              Start Text Chat Session
+            </h4>
             <p className="text-gray-400 text-xs max-w-xs mb-4">
-              Click the call button to speak directly to the AI Receptionist. Make sure your speakers are on!
+              Type directly to the AI Receptionist and receive live text-to-text responses instantly. Quiet testing.
             </p>
             <div 
               onClick={() => setShowKeyConfig(true)}
@@ -636,29 +786,24 @@ export default function DialerSim({
               </div>
             )}
 
-            {/* Dynamic Waveform Simulation */}
-            <div className="bg-gray-950/80 border border-gray-800 rounded-xl p-3 flex items-center justify-between gap-4">
+            {/* Dynamic Waveform & Mic Controls */}
+            <div className="bg-gray-950/80 border border-gray-800 rounded-xl p-3 flex items-center justify-between gap-3 animate-fade-in">
               <div className="flex items-center gap-2">
-                <div className="flex items-end gap-[3px] h-7 w-20">
-                  <div className={`w-[3px] bg-[#3B82F6] rounded-full h-2 ${isSpeaking ? 'animate-wave-1' : ''}`}></div>
-                  <div className={`w-[3px] bg-[#3B82F6] rounded-full h-4 ${isSpeaking ? 'animate-wave-2' : ''}`}></div>
-                  <div className={`w-[3px] bg-[#8B5CF6] rounded-full h-6 ${isSpeaking ? 'animate-wave-3' : ''}`}></div>
-                  <div className={`w-[3px] bg-[#3B82F6] rounded-full h-3 ${isSpeaking ? 'animate-wave-4' : ''}`}></div>
-                  <div className={`w-[3px] bg-[#3B82F6] rounded-full h-5 ${isSpeaking ? 'animate-wave-5' : ''}`}></div>
-                  <div className={`w-[3px] bg-[#8B5CF6] rounded-full h-2 ${isSpeaking ? 'animate-wave-2' : ''}`}></div>
-                </div>
-                <span className="text-[10px] font-mono text-gray-400">
-                  {isSpeaking ? 'AI is speaking...' : 'Ready to listen...'}
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-300">Text Session Active</span>
+                  <span className="text-[8px] font-mono text-gray-500">Responses are purely text-to-text</span>
+                </div>
               </div>
-
-              {/* End Call button */}
               <button 
                 onClick={endCall}
-                className="bg-red-500/20 hover:bg-red-500 hover:text-white text-red-400 p-2 rounded-lg border border-red-500/30 transition-all flex items-center gap-1 text-xs cursor-pointer"
+                className="bg-red-500/20 hover:bg-red-500 hover:text-white text-red-400 px-3 py-1.5 rounded-lg border border-red-500/30 transition-all text-xs cursor-pointer font-semibold flex items-center gap-1.5"
               >
-                <PhoneOff className="w-3.5 h-3.5" />
-                <span>Hang Up</span>
+                <X className="w-3.5 h-3.5" />
+                <span>End Chat</span>
               </button>
             </div>
           </div>

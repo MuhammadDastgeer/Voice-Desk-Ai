@@ -151,6 +151,29 @@ export default function Dashboard({
     });
   };
 
+  const isSlotAvailable = (requestedTime: string, appointmentIdToExclude?: string) => {
+    if (!requestedTime) return true;
+    
+    const cleanString = (s: string) => {
+      let val = s.toLowerCase().trim();
+      val = val.replace(/\b(at|on)\b/g, '');
+      val = val.replace(/:00/g, '');
+      val = val.replace(/[^a-z0-9]/g, '');
+      return val;
+    };
+    
+    const reqClean = cleanString(requestedTime);
+    if (!reqClean) return true;
+    
+    const hasConflict = appointments.some(apt => {
+      if (appointmentIdToExclude && apt.id === appointmentIdToExclude) return false;
+      if (apt.status === 'cancelled') return false;
+      return cleanString(apt.scheduledAt) === reqClean;
+    });
+    
+    return !hasConflict;
+  };
+
   // Create appointment
   const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,6 +191,11 @@ export default function Dashboard({
       status: (newApt.status as any) || 'pending',
       notes: newApt.notes || ''
     };
+
+    if (!isSlotAvailable(formattedApt.scheduledAt)) {
+      alert(`Error: The time slot "${formattedApt.scheduledAt}" is already booked. Please choose another time.`);
+      return;
+    }
 
     try {
       const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
@@ -520,6 +548,11 @@ export default function Dashboard({
 
   // Appointment booked from Dialer simulator directly!
   const handleDirectDialerBooking = async (name: string, vehicle: string, serviceName: string) => {
+    if (!isSlotAvailable('Saturday 10:00 AM')) {
+      alert('Error: Saturday 10:00 AM is already booked and unavailable. Please choose another time slot manually.');
+      return;
+    }
+
     // Find service ID
     const matchingService = services.find(s => s.name.toLowerCase().includes(serviceName.toLowerCase())) || services[0];
     
@@ -579,6 +612,11 @@ export default function Dashboard({
     scheduledAt: string;
     notes: string;
   }) => {
+    // Check if slot is available
+    if (!isSlotAvailable(args.scheduledAt)) {
+      throw new Error(`The requested time slot "${args.scheduledAt}" is already booked. Please pick a different date or time.`);
+    }
+
     // Find service ID matching the user request
     const matchingService = services.find(s => 
       s.name.toLowerCase().includes(args.serviceName.toLowerCase()) ||

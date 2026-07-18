@@ -221,7 +221,7 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
 
             <div>
               <label htmlFor="email" className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">
-                Business Email Address
+                Email Address (Gmail, Yahoo, Apple, Google, etc.)
               </label>
               <div className="relative group/input">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -235,7 +235,7 @@ export default function SignupPage({ onSignup }: SignupPageProps) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  placeholder="name@gmail.com, yahoo.com, apple.com..."
                   className="block w-full pl-11 pr-3 py-2 bg-gray-950/80 border border-gray-800 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/20 transition-all"
                 />
               </div>
