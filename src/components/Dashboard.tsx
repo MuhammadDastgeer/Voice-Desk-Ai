@@ -10,9 +10,10 @@ import {
 import { motion } from 'motion/react';
 import { Appointment, Conversation, AIAgent, Service, FAQ, WidgetConfig, BusinessProfile, BusinessHours } from '../types';
 import DialerSim from './DialerSim';
+import { supabaseService } from '../lib/supabase';
 
 interface DashboardProps {
-  activeTab: 'overview' | 'analytics' | 'conversations' | 'appointments' | 'agents' | 'services' | 'faqs' | 'widget' | 'settings';
+  activeTab: 'overview' | 'analytics' | 'appointments' | 'agents' | 'services' | 'faqs' | 'widget' | 'settings';
   appointments: Appointment[];
   conversations: Conversation[];
   agents: AIAgent[];
@@ -62,6 +63,7 @@ export default function Dashboard({
   const [studioSubTab, setStudioSubTab] = useState<'configure' | 'test'>('configure');
   const [agentSubTab, setAgentSubTab] = useState<'list' | 'studio' | 'edit'>('list');
   const [editingAgent, setEditingAgent] = useState<AIAgent | null>(null);
+  const [editingService, setEditingService] = useState<Service | null>(null);
 
   // Form states
   const [newApt, setNewApt] = useState<Partial<Appointment>>({
@@ -105,12 +107,12 @@ export default function Dashboard({
   };
 
   // Create appointment
-  const handleCreateAppointment = (e: React.FormEvent) => {
+  const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newApt.customerName || !newApt.phoneNumber) return;
     
     const formattedApt: Appointment = {
-      id: `apt-${Date.now()}`,
+      id: '',
       customerName: newApt.customerName,
       phoneNumber: newApt.phoneNumber,
       vehicleYear: newApt.vehicleYear || '2021',
@@ -122,13 +124,20 @@ export default function Dashboard({
       notes: newApt.notes || ''
     };
 
-    onUpdateAppointments([formattedApt, ...appointments]);
-    setShowAptModal(false);
-    // Reset
-    setNewApt({
-      customerName: '', phoneNumber: '', vehicleYear: '2021', vehicleMake: 'Toyota', vehicleModel: 'Camry',
-      serviceId: services[0]?.id || '', scheduledAt: '', status: 'pending', notes: ''
-    });
+    try {
+      const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+      const savedApt = await supabaseService.saveAppointment(userId, formattedApt);
+      onUpdateAppointments([savedApt, ...appointments]);
+      setShowAptModal(false);
+      // Reset
+      setNewApt({
+        customerName: '', phoneNumber: '', vehicleYear: '2021', vehicleMake: 'Toyota', vehicleModel: 'Camry',
+        serviceId: services[0]?.id || '', scheduledAt: '', status: 'pending', notes: ''
+      });
+    } catch (err: any) {
+      console.error('Error saving appointment:', err);
+      alert('Error saving appointment: ' + err.message);
+    }
   };
 
   // Create agent
@@ -157,26 +166,43 @@ export default function Dashboard({
     });
   };
 
-  // Create service
-  const handleCreateService = (e: React.FormEvent) => {
+  // Create / Update service
+  const handleCreateService = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newService.name) return;
 
-    const formattedService: Service = {
-      id: `srv-${Date.now()}`,
-      name: newService.name,
-      description: newService.description || '',
-      durationMinutes: Number(newService.durationMinutes) || 60,
-      priceType: (newService.priceType as any) || 'Fixed Price',
-      price: Number(newService.price) || 0,
-      isActive: true
-    };
+    try {
+      const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+      
+      const formattedService: Service = {
+        id: editingService ? editingService.id : '',
+        name: newService.name,
+        description: newService.description || '',
+        durationMinutes: Number(newService.durationMinutes) || 60,
+        priceType: (newService.priceType as any) || 'Fixed Price',
+        price: Number(newService.price) || 0,
+        isActive: editingService ? editingService.isActive : true
+      };
 
-    onUpdateServices([...services, formattedService]);
-    setShowServiceModal(false);
-    setNewService({
-      name: '', description: '', durationMinutes: 60, priceType: 'Fixed Price', price: 49.99, isActive: true
-    });
+      const savedService = await supabaseService.saveService(userId, formattedService);
+
+      if (editingService) {
+        // Update existing service
+        onUpdateServices(services.map(s => s.id === editingService.id ? savedService : s));
+        setEditingService(null);
+      } else {
+        // Create new service
+        onUpdateServices([...services, savedService]);
+      }
+
+      setShowServiceModal(false);
+      setNewService({
+        name: '', description: '', durationMinutes: 60, priceType: 'Fixed Price', price: 49.99, isActive: true
+      });
+    } catch (err: any) {
+      console.error('Error saving service:', err);
+      alert('Error saving service: ' + err.message);
+    }
   };
 
   // Create FAQ
@@ -197,8 +223,17 @@ export default function Dashboard({
   };
 
   // Delete handlers
-  const deleteAppointment = (id: string) => {
-    onUpdateAppointments(appointments.filter(a => a.id !== id));
+  const deleteAppointment = async (id: string) => {
+    if (confirm("Are you sure you want to delete this appointment?")) {
+      try {
+        const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+        await supabaseService.deleteAppointment(userId, id);
+        onUpdateAppointments(appointments.filter(a => a.id !== id));
+      } catch (err: any) {
+        console.error('Error deleting appointment:', err);
+        alert('Error deleting appointment: ' + err.message);
+      }
+    }
   };
 
   const deleteAgent = (id: string) => {
@@ -208,8 +243,17 @@ export default function Dashboard({
     }
   };
 
-  const deleteService = (id: string) => {
-    onUpdateServices(services.filter(s => s.id !== id));
+  const deleteService = async (id: string) => {
+    if (confirm("Are you sure you want to delete this service?")) {
+      try {
+        const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+        await supabaseService.deleteService(userId, id);
+        onUpdateServices(services.filter(s => s.id !== id));
+      } catch (err: any) {
+        console.error('Error deleting service:', err);
+        alert('Error deleting service: ' + err.message);
+      }
+    }
   };
 
   const deleteFaq = (id: string) => {
@@ -239,13 +283,13 @@ export default function Dashboard({
   const faqCategories = ['All', ...Array.from(new Set(faqs.map(f => f.category)))];
 
   // Appointment booked from Dialer simulator directly!
-  const handleDirectDialerBooking = (name: string, vehicle: string, serviceName: string) => {
+  const handleDirectDialerBooking = async (name: string, vehicle: string, serviceName: string) => {
     // Find service ID
     const matchingService = services.find(s => s.name.toLowerCase().includes(serviceName.toLowerCase())) || services[0];
     
     // Add appointment
     const newAptObj: Appointment = {
-      id: `apt-${Date.now()}`,
+      id: '',
       customerName: name,
       phoneNumber: '9999999999',
       vehicleYear: '2021',
@@ -257,29 +301,35 @@ export default function Dashboard({
       notes: 'Booked via simulated live dialer receptionist'
     };
 
-    onUpdateAppointments([newAptObj, ...appointments]);
+    try {
+      const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+      const savedApt = await supabaseService.saveAppointment(userId, newAptObj);
+      onUpdateAppointments([savedApt, ...appointments]);
 
-    // Add conversation
-    const newConvObj: Conversation = {
-      id: `con-${Date.now()}`,
-      callerName: name,
-      callerPhone: '9999999999',
-      status: 'completed',
-      duration: '1:45',
-      sentiment: 'positive',
-      appointmentBooked: true,
-      startedAt: 'Just now',
-      transcript: [
-        { sender: 'agent', text: 'Hello, how can I assist you today?', timestamp: '0:01' },
-        { sender: 'user', text: `I want to book an ${serviceName} for my ${vehicle}`, timestamp: '0:15' },
-        { sender: 'agent', text: `Sure, I have a slot available this Saturday at 10:00 AM. May I get your name?`, timestamp: '0:45' },
-        { sender: 'user', text: `Yes, please book it under ${name}`, timestamp: '1:10' },
-        { sender: 'agent', text: 'Excellent! Your appointment is fully confirmed. Have a great day!', timestamp: '1:40' }
-      ]
-    };
+      // Add conversation
+      const newConvObj: Conversation = {
+        id: `con-${Date.now()}`,
+        callerName: name,
+        callerPhone: '9999999999',
+        status: 'completed',
+        duration: '1:45',
+        sentiment: 'positive',
+        appointmentBooked: true,
+        startedAt: 'Just now',
+        transcript: [
+          { sender: 'agent', text: 'Hello, how can I assist you today?', timestamp: '0:01' },
+          { sender: 'user', text: `I want to book an ${serviceName} for my ${vehicle}`, timestamp: '0:15' },
+          { sender: 'agent', text: `Sure, I have a slot available this Saturday at 10:00 AM. May I get your name?`, timestamp: '0:45' },
+          { sender: 'user', text: `Yes, please book it under ${name}`, timestamp: '1:10' },
+          { sender: 'agent', text: 'Excellent! Your appointment is fully confirmed. Have a great day!', timestamp: '1:40' }
+        ]
+      };
 
-    onUpdateConversations([newConvObj, ...conversations]);
-    setSelectedConv(newConvObj);
+      onUpdateConversations([newConvObj, ...conversations]);
+      setSelectedConv(newConvObj);
+    } catch (err) {
+      console.error('Error in dialer booking:', err);
+    }
   };
 
   return (
@@ -332,7 +382,6 @@ export default function Dashboard({
             {[
               { tab: 'overview', label: 'Overview', icon: BarChart3, path: '/overview' },
               { tab: 'analytics', label: 'Analytics', icon: TrendingUp, path: '/analytics' },
-              { tab: 'conversations', label: 'Conversations', icon: MessageSquare, path: '/conversations' },
               { tab: 'appointments', label: 'Appointments', icon: Calendar, path: '/appointments' },
             ].map((item) => {
               const Icon = item.icon;
@@ -936,302 +985,6 @@ export default function Dashboard({
             </motion.div>
           )}
 
-          {/* CONVERSATIONS TAB */}
-          {activeTab === 'conversations' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Inner Sub Tabs bar */}
-              <div className="flex border-b border-[#1F2937] pb-1 gap-6 text-xs font-bold">
-                <button 
-                  onClick={() => setConvSubTab('list')}
-                  className={`pb-3 relative cursor-pointer font-extrabold tracking-tight transition-all flex items-center gap-1.5 ${
-                    convSubTab === 'list' 
-                      ? 'text-[#3B82F6] border-b-2 border-[#3B82F6]' 
-                      : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                  }`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  Call Logs List
-                </button>
-                {selectedConv && (
-                  <button 
-                    onClick={() => setConvSubTab('chat')}
-                    className={`pb-3 relative cursor-pointer font-extrabold tracking-tight transition-all flex items-center gap-1.5 ${
-                      convSubTab === 'chat' 
-                        ? 'text-[#3B82F6] border-b-2 border-[#3B82F6]' 
-                        : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                    }`}
-                  >
-                    <Play className="w-3.5 h-3.5" />
-                    Active Transcript: {selectedConv.callerName}
-                  </button>
-                )}
-              </div>
-
-              {convSubTab === 'list' ? (
-                /* FULL PAGE CALL LOGS LIST */
-                <motion.div 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-6 flex flex-col justify-between shadow-2xl"
-                >
-                  <div>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                      <div>
-                        <h4 className="text-[#F8FAFC] font-extrabold text-base tracking-tight">Call Logs Records</h4>
-                        <p className="text-[11px] text-[#94A3B8]">Full-page overview of customer dial-in recordings, durations, and AI sentiment analysis</p>
-                      </div>
-                      
-                      {/* Search filter input */}
-                      <div className="relative w-full sm:w-64">
-                        <Search className="w-3.5 h-3.5 text-[#94A3B8]/60 absolute top-2.5 left-3" />
-                        <input 
-                          type="text" 
-                          placeholder="Search caller name..." 
-                          value={convSearch}
-                          onChange={(e) => setConvSearch(e.target.value)}
-                          className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl pl-9 pr-3 py-2 outline-none transition-all"
-                        />
-                      </div>
-                    </div>
-   
-                    {/* Calls Table List - Full Width */}
-                    <div className="overflow-x-auto rounded-xl border border-[#1F2937]">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-[#020617] text-[#94A3B8] border-b border-[#1F2937]">
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Caller Profile</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Contact Number</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Status</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Duration</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Started At</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">AI Sentiment</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Appointment Booked</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#1F2937]/60">
-                          {filteredConversations.length === 0 ? (
-                            <tr>
-                              <td colSpan={8} className="p-12 text-center text-[#94A3B8] italic bg-[#020617]/30">
-                                No call logs found.
-                              </td>
-                            </tr>
-                          ) : (
-                            filteredConversations.map((conv) => {
-                              const isSelected = selectedConv?.id === conv.id;
-                              return (
-                                <motion.tr 
-                                  whileHover={{ backgroundColor: "rgba(59, 130, 246, 0.02)" }}
-                                  key={conv.id} 
-                                  onClick={() => {
-                                    setSelectedConv(conv);
-                                    setConvSubTab('chat');
-                                  }}
-                                  className={`cursor-pointer transition-colors ${
-                                    isSelected ? 'bg-[#3B82F6]/5 text-white border-l-2 border-[#3B82F6]' : ''
-                                  }`}
-                                >
-                                  <td className="p-4">
-                                    <span className="font-extrabold block text-white text-sm">{conv.callerName}</span>
-                                    <span className="text-[10px] text-[#94A3B8] font-mono">ID: {conv.id}</span>
-                                  </td>
-                                  <td className="p-4 font-mono text-gray-300">
-                                    {conv.callerPhone}
-                                  </td>
-                                  <td className="p-4 text-center">
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center justify-center gap-1.5 w-24 mx-auto ${
-                                      conv.status === 'completed' 
-                                        ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/30' 
-                                        : 'bg-red-950/20 text-red-400 border-red-900/30'
-                                    }`}>
-                                      <span className={`w-1.5 h-1.5 rounded-full ${conv.status === 'completed' ? 'bg-[#10B981]' : 'bg-red-400'}`}></span>
-                                      {conv.status}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 font-mono text-[#94A3B8] text-center font-bold">{conv.duration}</td>
-                                  <td className="p-4 text-[#94A3B8] text-center">{conv.startedAt}</td>
-                                  <td className="p-4">
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                                      conv.sentiment === 'positive' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' :
-                                      conv.sentiment === 'neutral' ? 'bg-gray-900 text-[#94A3B8] border-gray-800' :
-                                      'bg-red-950/40 text-red-400 border-red-900/30'
-                                    }`}>
-                                      {conv.sentiment}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-center">
-                                    <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${conv.appointmentBooked ? 'text-[#3B82F6] bg-[#3B82F6]/10 border border-[#3B82F6]/20' : 'text-[#94A3B8]'}`}>
-                                      {conv.appointmentBooked ? '✓ Yes, Booked' : '— No booking'}
-                                    </span>
-                                  </td>
-                                  <td className="p-4 text-center">
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedConv(conv);
-                                        setConvSubTab('chat');
-                                      }}
-                                      className="bg-[#020617] hover:bg-[#3B82F6] text-[#3B82F6] hover:text-white px-3 py-1.5 rounded-lg border border-[#1F2937] hover:border-[#3B82F6] text-xs font-bold transition-all cursor-pointer"
-                                    >
-                                      View Transcript
-                                    </button>
-                                  </td>
-                                </motion.tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-   
-                  <p className="text-[10px] text-[#94A3B8]/60 mt-6 italic">
-                    *Click on any conversational log row to open the dedicated "Active Transcript" tab to review full dialogue scripts and audio simulations.
-                  </p>
-                </motion.div>
-              ) : (
-                /* FULL PAGE CHAT TRANSCRIPT DETAILS */
-                <motion.div 
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-6 flex flex-col justify-between shadow-2xl relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-[#3B82F6]/5 rounded-full blur-3xl pointer-events-none"></div>
-                  {selectedConv ? (
-                    <div className="flex flex-col space-y-6">
-                      
-                      {/* Top Header Row with Back button */}
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-[#1F2937]">
-                        <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <button 
-                              onClick={() => setConvSubTab('list')}
-                              className="text-xs text-[#3B82F6] hover:text-white font-bold flex items-center gap-1 transition-colors cursor-pointer bg-[#3B82F6]/10 px-2.5 py-1 rounded-lg border border-[#3B82F6]/25"
-                            >
-                              ← Back to Logs
-                            </button>
-                            <span className="text-[9px] text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-1 rounded border border-[#3B82F6]/25 uppercase tracking-wider font-extrabold font-mono">Active Full Transcript View</span>
-                          </div>
-                          <h3 className="text-white font-extrabold text-xl font-display">{selectedConv.callerName}</h3>
-                          <p className="text-xs text-[#94A3B8] font-mono mt-0.5">{selectedConv.callerPhone} • Started {selectedConv.startedAt}</p>
-                        </div>
-
-                        {/* Interactive Waveform mockup & Player Button */}
-                        <div className="flex items-center gap-3 bg-[#020617] border border-[#1F2937] p-3 rounded-2xl w-full sm:w-auto">
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex items-center gap-0.5 h-6">
-                              <div className="w-0.5 h-3.5 bg-[#3B82F6] rounded-full animate-pulse"></div>
-                              <div className="w-0.5 h-5.5 bg-[#3B82F6] rounded-full animate-pulse delay-100"></div>
-                              <div className="w-0.5 h-2 bg-[#3B82F6] rounded-full animate-pulse delay-200"></div>
-                              <div className="w-0.5 h-4.5 bg-[#3B82F6] rounded-full animate-pulse delay-75"></div>
-                              <div className="w-0.5 h-3 bg-[#3B82F6] rounded-full animate-pulse delay-150"></div>
-                            </div>
-                            <span className="text-[10px] text-[#94A3B8] font-mono font-medium mr-4">Voice log play stream</span>
-                          </div>
-                          <motion.button 
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => alert(`Playing audio simulation of call with ${selectedConv.callerName}!`)}
-                            className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-current" /> Play Recording
-                          </motion.button>
-                        </div>
-                      </div>
-   
-                      {/* Detailed Meta Data Stats Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-[#020617] border border-[#1F2937] p-3.5 rounded-xl">
-                          <span className="text-[10px] text-[#94A3B8] block uppercase font-extrabold tracking-wider font-mono">Call Duration</span>
-                          <span className="text-sm font-mono font-bold text-white block mt-1">{selectedConv.duration}</span>
-                        </div>
-                        <div className="bg-[#020617] border border-[#1F2937] p-3.5 rounded-xl">
-                          <span className="text-[10px] text-[#94A3B8] block uppercase font-extrabold tracking-wider font-mono">Sentiment Score</span>
-                          <span className={`text-sm font-bold block mt-1 capitalize ${
-                            selectedConv.sentiment === 'positive' ? 'text-emerald-400' :
-                            selectedConv.sentiment === 'neutral' ? 'text-[#94A3B8]' : 'text-red-400'
-                          }`}>{selectedConv.sentiment}</span>
-                        </div>
-                        <div className="bg-[#020617] border border-[#1F2937] p-3.5 rounded-xl">
-                          <span className="text-[10px] text-[#94A3B8] block uppercase font-extrabold tracking-wider font-mono">AI Reception Action</span>
-                          <span className={`text-sm font-bold block mt-1 ${
-                            selectedConv.appointmentBooked ? 'text-[#3B82F6]' : 'text-[#94A3B8]'
-                          }`}>{selectedConv.appointmentBooked ? '✓ Appointment Booked' : '— No Action Taken'}</span>
-                        </div>
-                        <div className="bg-[#020617] border border-[#1F2937] p-3.5 rounded-xl">
-                          <span className="text-[10px] text-[#94A3B8] block uppercase font-extrabold tracking-wider font-mono">Status State</span>
-                          <span className="text-sm font-bold text-emerald-400 block mt-1 flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-[#10B981]"></span>
-                            Completed
-                          </span>
-                        </div>
-                      </div>
-   
-                      {/* Bubble chat section - beautiful, spacious full page bubbles */}
-                      <div className="bg-[#020617]/50 border border-[#1F2937]/50 rounded-2xl p-6 space-y-5 max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800">
-                        {selectedConv.transcript.map((line, idx) => {
-                          const isUser = line.sender === 'user';
-                          return (
-                            <div 
-                              key={idx}
-                              className={`flex flex-col max-w-[70%] ${
-                                isUser ? 'ml-auto items-end' : 'mr-auto items-start'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] text-[#94A3B8] font-mono tracking-wider capitalize font-bold">
-                                  {isUser ? 'Customer' : 'Receptionist AI'}
-                                </span>
-                                <span className="text-[9px] text-[#94A3B8]/50 font-mono">{line.timestamp}</span>
-                              </div>
-                              <div className={`px-5 py-3 rounded-2xl text-xs leading-relaxed ${
-                                isUser 
-                                  ? 'bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] text-white rounded-tr-none shadow-md shadow-black/25 font-medium' 
-                                  : 'bg-[#111827] text-gray-200 border border-[#1F2937] rounded-tl-none font-medium'
-                              }`}>
-                                {line.text}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Footer Actions */}
-                      <div className="flex items-center justify-between pt-2">
-                        <button 
-                          onClick={() => setConvSubTab('list')}
-                          className="bg-transparent hover:bg-gray-800 text-[#94A3B8] hover:text-white px-5 py-2.5 rounded-xl text-xs font-bold border border-[#1F2937] transition-all cursor-pointer"
-                        >
-                          ← Back to Call Records
-                        </button>
-                        <p className="text-[10px] text-[#94A3B8]/60 italic">
-                          Speech-to-text synced dynamically.
-                        </p>
-                      </div>
-
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-center py-24">
-                      <MessageSquare className="w-12 h-12 text-[#94A3B8]/40 mb-3 animate-pulse" />
-                      <p className="text-white font-semibold text-sm">No log selected</p>
-                      <p className="text-[10px] text-[#94A3B8]/60 mt-1 max-w-[200px]">Select a call record from the logs table to review details.</p>
-                      <button 
-                        onClick={() => setConvSubTab('list')}
-                        className="mt-4 bg-[#3B82F6] hover:bg-[#3B82F6]/90 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer"
-                      >
-                        Browse Call Records
-                      </button>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-
           {/* APPOINTMENTS TAB */}
           {activeTab === 'appointments' && (
             <motion.div 
@@ -1337,9 +1090,18 @@ export default function Dashboard({
                             <td className="p-4 text-center">
                               <select 
                                 value={apt.status}
-                                onChange={(e) => {
-                                  const updated = appointments.map(a => a.id === apt.id ? { ...a, status: e.target.value as any } : a);
-                                  onUpdateAppointments(updated);
+                                onChange={async (e) => {
+                                  const newStatus = e.target.value as any;
+                                  const updatedApt = { ...apt, status: newStatus };
+                                  try {
+                                    const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+                                    const saved = await supabaseService.saveAppointment(userId, updatedApt);
+                                    const updated = appointments.map(a => a.id === apt.id ? saved : a);
+                                    onUpdateAppointments(updated);
+                                  } catch (err: any) {
+                                    console.error('Error updating status:', err);
+                                    alert('Error updating status: ' + err.message);
+                                  }
                                 }}
                                 className={`px-3 py-1 rounded-full text-[10px] font-bold border bg-[#020617] outline-none cursor-pointer transition-all ${
                                   apt.status === 'confirmed' ? 'text-[#3B82F6] border-[#3B82F6]/40 shadow-sm shadow-[#3B82F6]/20' :
@@ -1964,7 +1726,13 @@ export default function Dashboard({
                 <motion.button 
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => setShowServiceModal(true)}
+                  onClick={() => {
+                    setEditingService(null);
+                    setNewService({
+                      name: '', description: '', durationMinutes: 60, priceType: 'Fixed Price', price: 49.99, isActive: true
+                    });
+                    setShowServiceModal(true);
+                  }}
                   className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md shadow-[#3B82F6]/20 transition-colors"
                 >
                   <Plus className="w-4 h-4 stroke-[3]" /> Add Service
@@ -1988,14 +1756,38 @@ export default function Dashboard({
                           {srv.priceType}
                         </span>
                         
-                        <motion.button 
-                          whileHover={{ scale: 1.1, color: "#f87171" }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => deleteService(srv.id)}
-                          className="text-[#94A3B8] hover:text-red-400 p-1.5 rounded-lg hover:bg-[#020617] transition-all cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </motion.button>
+                        <div className="flex items-center gap-1">
+                          <motion.button 
+                            whileHover={{ scale: 1.1, color: "#3B82F6" }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => {
+                              setEditingService(srv);
+                              setNewService({
+                                name: srv.name,
+                                description: srv.description,
+                                durationMinutes: srv.durationMinutes,
+                                priceType: srv.priceType,
+                                price: srv.price,
+                                isActive: srv.isActive
+                              });
+                              setShowServiceModal(true);
+                            }}
+                            className="text-[#94A3B8] hover:text-[#3B82F6] p-1.5 rounded-lg hover:bg-[#020617] transition-all cursor-pointer"
+                            title="Edit Service"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </motion.button>
+
+                          <motion.button 
+                            whileHover={{ scale: 1.1, color: "#f87171" }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => deleteService(srv.id)}
+                            className="text-[#94A3B8] hover:text-red-400 p-1.5 rounded-lg hover:bg-[#020617] transition-all cursor-pointer"
+                            title="Delete Service"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </motion.button>
+                        </div>
                       </div>
  
                       <h4 className="text-white font-extrabold text-sm mb-2 group-hover:text-[#3B82F6] transition-colors">{srv.name}</h4>
@@ -2619,13 +2411,15 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* ADD SERVICE MODAL */}
+      {/* ADD / EDIT SERVICE MODAL */}
       {showServiceModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#111827] border border-[#1F2937] rounded-2xl w-full max-w-xl shadow-2xl relative overflow-hidden animate-zoomIn">
             
             <div className="bg-[#020617] px-5 py-4 border-b border-[#1F2937] flex items-center justify-between">
-              <h3 className="text-white font-extrabold text-sm">Add Service</h3>
+              <h3 className="text-white font-extrabold text-sm">
+                {editingService ? 'Edit Service' : 'Add Service'}
+              </h3>
               <button onClick={() => setShowServiceModal(false)} className="text-[#94A3B8] hover:text-white cursor-pointer transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -2705,7 +2499,7 @@ export default function Dashboard({
                   type="submit" 
                   className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white px-5 py-2 rounded-xl text-xs font-bold cursor-pointer shadow-md shadow-[#3B82F6]/25 transition-all"
                 >
-                  Add Service
+                  {editingService ? 'Save Changes' : 'Add Service'}
                 </button>
               </div>
  

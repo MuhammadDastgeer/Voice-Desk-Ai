@@ -4,6 +4,7 @@ import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
 import LoginPage from './components/LoginPage';
 import SignupPage from './components/SignupPage';
+import { supabaseService } from './lib/supabase';
 import { Appointment, Conversation, AIAgent, Service, FAQ, WidgetConfig, BusinessProfile, BusinessHours } from './types';
 import { 
   INITIAL_APPOINTMENTS, INITIAL_CONVERSATIONS, INITIAL_AGENTS, 
@@ -88,11 +89,65 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('vd_profile', JSON.stringify(profile));
-  }, [profile]);
+    if (isLoggedIn) {
+      const userId = localStorage.getItem('vd_current_user_id');
+      if (userId) {
+        supabaseService.saveBusinessProfile(userId, profile).catch(err => {
+          console.error('Error syncing profile to Supabase:', err);
+        });
+      }
+    }
+  }, [profile, isLoggedIn]);
 
   useEffect(() => {
     localStorage.setItem('vd_hours', JSON.stringify(hours));
-  }, [hours]);
+    if (isLoggedIn) {
+      const userId = localStorage.getItem('vd_current_user_id');
+      if (userId) {
+        supabaseService.saveBusinessHours(userId, hours).catch(err => {
+          console.error('Error syncing hours to Supabase:', err);
+        });
+      }
+    }
+  }, [hours, isLoggedIn]);
+
+  // Load profile, hours, and appointments from Supabase when user logs in
+  useEffect(() => {
+    if (isLoggedIn) {
+      const userId = localStorage.getItem('vd_current_user_id');
+      if (!userId) return;
+
+      const fetchUserData = async () => {
+        try {
+          const dbProfile = await supabaseService.getBusinessProfile(userId);
+          if (dbProfile) {
+            setProfile(dbProfile);
+          } else {
+            // Pre-seed profile on first login
+            await supabaseService.saveBusinessProfile(userId, profile);
+          }
+
+          const dbHours = await supabaseService.getBusinessHours(userId);
+          if (dbHours) {
+            setHours(dbHours);
+          } else {
+            // Pre-seed hours on first login
+            await supabaseService.saveBusinessHours(userId, hours);
+          }
+
+          const dbAppointments = await supabaseService.getAppointments(userId);
+          setAppointments(dbAppointments);
+
+          const dbServices = await supabaseService.getServices(userId);
+          setServices(dbServices);
+        } catch (err) {
+          console.error('Error loading data from Supabase:', err);
+        }
+      };
+
+      fetchUserData();
+    }
+  }, [isLoggedIn]);
 
   // Handle direct appointment booking from landing page live demo widget
   const handleLandingPageBooking = (name: string, vehicle: string, serviceName: string) => {
@@ -138,7 +193,7 @@ export default function App() {
   };
 
   // Helper component to guard protected dashboard routes
-  const ProtectedDashboard = ({ activeTab }: { activeTab: 'overview' | 'analytics' | 'conversations' | 'appointments' | 'agents' | 'services' | 'faqs' | 'widget' | 'settings' }) => {
+  const ProtectedDashboard = ({ activeTab }: { activeTab: 'overview' | 'analytics' | 'appointments' | 'agents' | 'services' | 'faqs' | 'widget' | 'settings' }) => {
     if (!isLoggedIn) {
       return <Navigate to="/login" replace />;
     }
@@ -161,7 +216,12 @@ export default function App() {
         onUpdateWidgets={setWidgets}
         onUpdateProfile={setProfile}
         onUpdateHours={setHours}
-        onSignOut={() => setIsLoggedIn(false)}
+        onSignOut={() => {
+          supabaseService.signOut();
+          setIsLoggedIn(false);
+          setAppointments([]);
+          setServices([]);
+        }}
       />
     );
   };
@@ -186,7 +246,6 @@ export default function App() {
           {/* Protected Tabbed Dashboard Routes */}
           <Route path="/overview" element={<ProtectedDashboard activeTab="overview" />} />
           <Route path="/analytics" element={<ProtectedDashboard activeTab="analytics" />} />
-          <Route path="/conversations" element={<ProtectedDashboard activeTab="conversations" />} />
           <Route path="/appointments" element={<ProtectedDashboard activeTab="appointments" />} />
           <Route path="/agents" element={<ProtectedDashboard activeTab="agents" />} />
           <Route path="/services" element={<ProtectedDashboard activeTab="services" />} />
