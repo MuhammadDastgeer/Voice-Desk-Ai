@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { BusinessProfile, BusinessHours, Appointment, Service } from '../types';
+import { BusinessProfile, BusinessHours, Appointment, Service, FAQ } from '../types';
 
 // Retrieve environment variables
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
@@ -602,6 +602,117 @@ export const supabaseService = {
       const current = await this.getServices(userId);
       const filtered = current.filter(s => s.id !== serviceId);
       localStorage.setItem(`vd_services_${userId}`, JSON.stringify(filtered));
+      return true;
+    }
+  },
+
+  // 16. Get FAQs
+  async getFAQs(userId: string): Promise<FAQ[]> {
+    if (isConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('faqs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching FAQs:', error.message);
+        return [];
+      }
+      
+      return (data || []).map(row => ({
+        id: row.id,
+        question: row.question,
+        answer: row.answer,
+        category: row.category
+      }));
+    } else {
+      // Sandbox Simulation
+      const saved = localStorage.getItem(`vd_faqs_${userId}`);
+      return saved ? JSON.parse(saved) : [];
+    }
+  },
+
+  // 17. Save FAQ (Create/Update)
+  async saveFAQ(userId: string, faq: FAQ): Promise<FAQ> {
+    if (isConfigured && supabase) {
+      // If faq.id is missing or looks like a temp client mock ID, treat as new
+      const isNew = !faq.id || faq.id.startsWith('faq-') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(faq.id);
+      
+      const payload: any = {
+        user_id: userId,
+        question: faq.question,
+        answer: faq.answer,
+        category: faq.category || 'General'
+      };
+
+      if (isNew) {
+        const { data, error } = await supabase
+          .from('faqs')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (error) throw error;
+        return {
+          id: data.id,
+          question: data.question,
+          answer: data.answer,
+          category: data.category
+        };
+      } else {
+        const { data, error } = await supabase
+          .from('faqs')
+          .update(payload)
+          .eq('id', faq.id)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return {
+          id: data.id,
+          question: data.question,
+          answer: data.answer,
+          category: data.category
+        };
+      }
+    } else {
+      // Sandbox Simulation
+      const current = await this.getFAQs(userId);
+      let updatedFaq = { ...faq };
+      if (!updatedFaq.id || updatedFaq.id.startsWith('faq-') === false || updatedFaq.id.startsWith('faq-mock') === false) {
+        updatedFaq.id = 'faq-mock-' + Math.random().toString(36).substr(2, 9);
+      }
+      
+      const index = current.findIndex(f => f.id === updatedFaq.id);
+      if (index !== -1) {
+        current[index] = updatedFaq;
+      } else {
+        current.push(updatedFaq);
+      }
+      
+      localStorage.setItem(`vd_faqs_${userId}`, JSON.stringify(current));
+      return updatedFaq;
+    }
+  },
+
+  // 18. Delete FAQ
+  async deleteFAQ(userId: string, faqId: string): Promise<boolean> {
+    if (isConfigured && supabase) {
+      const { error } = await supabase
+        .from('faqs')
+        .delete()
+        .eq('id', faqId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return true;
+    } else {
+      // Sandbox Simulation
+      const current = await this.getFAQs(userId);
+      const filtered = current.filter(f => f.id !== faqId);
+      localStorage.setItem(`vd_faqs_${userId}`, JSON.stringify(filtered));
       return true;
     }
   }

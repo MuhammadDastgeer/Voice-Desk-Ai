@@ -10,6 +10,7 @@ import DialerSim from './DialerSim';
 
 interface LandingPageProps {
   onAppointmentBooked: (name: string, vehicle: string, service: string) => void;
+  isLoggedIn?: boolean;
 }
 
 const containerVariants = {
@@ -28,7 +29,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
-export default function LandingPage({ onAppointmentBooked }: LandingPageProps) {
+export default function LandingPage({ onAppointmentBooked, isLoggedIn = false }: LandingPageProps) {
   
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
@@ -96,17 +97,30 @@ export default function LandingPage({ onAppointmentBooked }: LandingPageProps) {
 
           {/* Auth CTA Buttons */}
           <div className="flex items-center gap-4">
-            <Link to="/login" className="text-sm font-semibold transition-colors cursor-pointer text-[#94A3B8] hover:text-white">
-              Sign in
-            </Link>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Link 
-                to="/signup"
-                className="bg-gradient-to-r from-[#3B82F6] via-[#8B5CF6] to-[#EC4899] text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-[#8B5CF6]/20 flex items-center gap-1.5 cursor-pointer"
-              >
-                Get Started <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </motion.div>
+            {isLoggedIn ? (
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Link 
+                  to="/overview"
+                  className="bg-gradient-to-r from-[#3B82F6] via-[#8B5CF6] to-[#EC4899] text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-[#8B5CF6]/20 flex items-center gap-1.5 cursor-pointer"
+                >
+                  Go to Dashboard <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </motion.div>
+            ) : (
+              <>
+                <Link to="/login" className="text-sm font-semibold transition-colors cursor-pointer text-[#94A3B8] hover:text-white">
+                  Sign in
+                </Link>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <Link 
+                    to="/signup"
+                    className="bg-gradient-to-r from-[#3B82F6] via-[#8B5CF6] to-[#EC4899] text-white text-sm font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-[#8B5CF6]/20 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    Get Started <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </motion.div>
+              </>
+            )}
           </div>
         </div>
       </motion.header>
@@ -145,10 +159,10 @@ export default function LandingPage({ onAppointmentBooked }: LandingPageProps) {
             <div className="flex flex-col sm:flex-row gap-4 mb-10 w-full sm:w-auto">
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
                 <Link 
-                  to="/signup"
+                  to={isLoggedIn ? "/overview" : "/signup"}
                   className="bg-gradient-to-r from-[#3B82F6] via-[#8B5CF6] to-[#EC4899] text-white font-bold px-7 py-4 rounded-xl transition-all shadow-lg shadow-[#8B5CF6]/20 text-center flex items-center justify-center gap-2 cursor-pointer text-sm tracking-wide"
                 >
-                  Start Free — No Card Needed <ArrowRight className="w-4 h-4" />
+                  {isLoggedIn ? "Go to Dashboard" : "Start Free — No Card Needed"} <ArrowRight className="w-4 h-4" />
                 </Link>
               </motion.div>
               <motion.button 

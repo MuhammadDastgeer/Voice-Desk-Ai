@@ -140,6 +140,9 @@ export default function App() {
 
           const dbServices = await supabaseService.getServices(userId);
           setServices(dbServices);
+
+          const dbFaqs = await supabaseService.getFAQs(userId);
+          setFaqs(dbFaqs);
         } catch (err) {
           console.error('Error loading data from Supabase:', err);
         }
@@ -221,6 +224,7 @@ export default function App() {
           setIsLoggedIn(false);
           setAppointments([]);
           setServices([]);
+          setFaqs([]);
         }}
       />
     );
@@ -239,7 +243,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={<LandingPage onAppointmentBooked={handleLandingPageBooking} />} />
+          <Route path="/" element={<LandingPage isLoggedIn={isLoggedIn} onAppointmentBooked={handleLandingPageBooking} />} />
           <Route path="/login" element={<PublicRoute><LoginPage onLogin={() => setIsLoggedIn(true)} /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><SignupPage onSignup={() => setIsLoggedIn(true)} /></PublicRoute>} />
 
