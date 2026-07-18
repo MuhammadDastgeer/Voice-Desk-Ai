@@ -196,7 +196,7 @@ export default function App() {
   };
 
   // Helper component to guard protected dashboard routes
-  const ProtectedDashboard = ({ activeTab }: { activeTab: 'overview' | 'analytics' | 'appointments' | 'agents' | 'services' | 'faqs' | 'widget' | 'settings' }) => {
+  const ProtectedDashboard = ({ activeTab }: { activeTab: 'overview' | 'analytics' | 'appointments' | 'agents' | 'services' | 'faqs' | 'settings' }) => {
     if (!isLoggedIn) {
       return <Navigate to="/login" replace />;
     }
@@ -254,7 +254,6 @@ export default function App() {
           <Route path="/agents" element={<ProtectedDashboard activeTab="agents" />} />
           <Route path="/services" element={<ProtectedDashboard activeTab="services" />} />
           <Route path="/faqs" element={<ProtectedDashboard activeTab="faqs" />} />
-          <Route path="/widget" element={<ProtectedDashboard activeTab="widget" />} />
           <Route path="/settings" element={<ProtectedDashboard activeTab="settings" />} />
 
           {/* Dynamic fallback */}

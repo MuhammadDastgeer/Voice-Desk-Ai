@@ -17,10 +17,11 @@ export const INITIAL_AGENTS: AIAgent[] = [
 - Confirm important details (like customer name, vehicle make/model, and desired service) before finalization.
 - Always remain polite and helpful.`,
     isActive: true,
+    type: 'voice',
   },
   {
     id: 'agt-2',
-    name: 'Welcome',
+    name: 'Welcome Text Agent',
     voice: 'Alloy - Neutral',
     personality: 'Professional',
     interruptionSensitivity: 'Medium',
@@ -34,6 +35,7 @@ export const INITIAL_AGENTS: AIAgent[] = [
 - Always remain polite and helpful
 - End conversations politely.`,
     isActive: true,
+    type: 'text',
   }
 ];
 

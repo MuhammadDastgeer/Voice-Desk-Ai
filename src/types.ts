@@ -32,6 +32,7 @@ export interface AIAgent {
   greetingMessage: string;
   systemPrompt: string;
   isActive: boolean;
+  type?: 'voice' | 'text';
 }
 
 export interface Service {

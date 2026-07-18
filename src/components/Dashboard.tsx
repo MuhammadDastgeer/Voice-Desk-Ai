@@ -13,7 +13,7 @@ import DialerSim from './DialerSim';
 import { supabaseService } from '../lib/supabase';
 
 interface DashboardProps {
-  activeTab: 'overview' | 'analytics' | 'appointments' | 'agents' | 'services' | 'faqs' | 'widget' | 'settings';
+  activeTab: 'overview' | 'analytics' | 'appointments' | 'agents' | 'services' | 'faqs' | 'settings';
   appointments: Appointment[];
   conversations: Conversation[];
   agents: AIAgent[];
@@ -87,6 +87,7 @@ export default function Dashboard({
   });
 
   const [settingsTab, setSettingsTab] = useState<'profile' | 'hours' | 'security'>('profile');
+  const [agentTypeFilter, setAgentTypeFilter] = useState<'voice' | 'text'>('voice');
 
   // Change password states
   const [oldPassword, setOldPassword] = useState('');
@@ -198,7 +199,8 @@ export default function Dashboard({
       interruptionSensitivity: (newAgent.interruptionSensitivity as any) || 'Medium',
       greetingMessage: newAgent.greetingMessage || 'Hello! Thank you for calling...',
       systemPrompt: newAgent.systemPrompt || 'You are a professional assistant...',
-      isActive: true
+      isActive: true,
+      type: newAgent.type || agentTypeFilter
     };
 
     onUpdateAgents([...agents, formattedAgent]);
@@ -207,7 +209,8 @@ export default function Dashboard({
     setNewAgent({
       name: '', voice: 'Alloy - Neutral', personality: 'Professional', interruptionSensitivity: 'Medium',
       greetingMessage: 'Hello! Thank you for calling... How can I assist you?',
-      systemPrompt: 'You are a professional auto repair assistant...'
+      systemPrompt: 'You are a professional auto repair assistant...',
+      type: 'voice'
     });
   };
 
@@ -351,6 +354,153 @@ export default function Dashboard({
     ? faqs 
     : faqs.filter(f => f.category.toLowerCase() === faqCategoryFilter.toLowerCase());
 
+  const filteredAgents = agents.filter(agt => (agt.type || 'voice') === agentTypeFilter);
+
+  // Dynamic statistics calculations for Overview & Analytics tabs
+  const parseDurationToSeconds = (durationStr: string): number => {
+    if (!durationStr || !durationStr.includes(':')) return 0;
+    const parts = durationStr.split(':');
+    const minutes = parseInt(parts[0], 10) || 0;
+    const seconds = parseInt(parts[1], 10) || 0;
+    return (minutes * 60) + seconds;
+  };
+
+  const formatSecondsToMMSS = (totalSeconds: number): string => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.round(totalSeconds % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const totalDurationSeconds = conversations.reduce((acc, conv) => acc + parseDurationToSeconds(conv.duration), 0);
+  const avgDurationSeconds = conversations.length > 0 ? totalDurationSeconds / conversations.length : 0;
+  const avgCallDurationStr = conversations.length > 0 ? formatSecondsToMMSS(avgDurationSeconds) : '0:00';
+
+  const getWeeklyBreakdown = () => {
+    const days = [
+      { day: 'Mon', calls: 0, appointments: 0 },
+      { day: 'Tue', calls: 0, appointments: 0 },
+      { day: 'Wed', calls: 0, appointments: 0 },
+      { day: 'Thu', calls: 0, appointments: 0 },
+      { day: 'Fri', calls: 0, appointments: 0 },
+      { day: 'Sat', calls: 0, appointments: 0 },
+      { day: 'Sun', calls: 0, appointments: 0 },
+    ];
+
+    const dayMap: { [key: string]: number } = {
+      'monday': 0, 'mon': 0,
+      'tuesday': 1, 'tue': 1,
+      'wednesday': 2, 'wed': 2,
+      'thursday': 3, 'thu': 3,
+      'friday': 4, 'fri': 4,
+      'saturday': 5, 'sat': 5,
+      'sunday': 6, 'sun': 6
+    };
+
+    conversations.forEach((conv) => {
+      let dayIndex = -1;
+      if (conv.startedAt) {
+        const lower = conv.startedAt.toLowerCase();
+        for (const [key, val] of Object.entries(dayMap)) {
+          if (lower.includes(key)) {
+            dayIndex = val;
+            break;
+          }
+        }
+      }
+      if (dayIndex === -1) {
+        dayIndex = (new Date().getDay() + 6) % 7;
+      }
+      days[dayIndex].calls += 1;
+    });
+
+    appointments.forEach((apt) => {
+      let dayIndex = -1;
+      if (apt.scheduledAt) {
+        const lower = apt.scheduledAt.toLowerCase();
+        for (const [key, val] of Object.entries(dayMap)) {
+          if (lower.includes(key)) {
+            dayIndex = val;
+            break;
+          }
+        }
+      }
+      if (dayIndex === -1) {
+        dayIndex = (new Date().getDay() + 6) % 7;
+      }
+      days[dayIndex].appointments += 1;
+      if (days[dayIndex].calls < days[dayIndex].appointments) {
+        days[dayIndex].calls = days[dayIndex].appointments;
+      }
+    });
+
+    return days;
+  };
+
+  const weeklyBreakdown = getWeeklyBreakdown();
+  const maxWeeklyCallsOrApts = Math.max(...weeklyBreakdown.map(d => Math.max(d.calls, d.appointments, 1)));
+
+  const getSvgPaths = () => {
+    const maxVal = Math.max(...weeklyBreakdown.map(d => Math.max(d.calls, d.appointments, 1)));
+    
+    const callPoints = weeklyBreakdown.map((d, idx) => {
+      const x = idx * (500 / 6);
+      const y = 140 - (d.calls / maxVal) * 110;
+      return { x, y };
+    });
+
+    const aptPoints = weeklyBreakdown.map((d, idx) => {
+      const x = idx * (500 / 6);
+      const y = 140 - (d.appointments / maxVal) * 110;
+      return { x, y };
+    });
+
+    const callLinePath = "M " + callPoints.map(p => `${p.x},${p.y}`).join(" L ");
+    const callAreaPath = callLinePath + " L 500,150 L 0,150 Z";
+
+    const aptLinePath = "M " + aptPoints.map(p => `${p.x},${p.y}`).join(" L ");
+    const aptAreaPath = aptLinePath + " L 500,150 L 0,150 Z";
+
+    return { callLinePath, callAreaPath, aptLinePath, aptAreaPath };
+  };
+
+  const svgPaths = getSvgPaths();
+
+  const get30DayTrendPaths = () => {
+    const pointsCount = 10;
+    const stats = Array.from({ length: pointsCount }, (_, idx) => {
+      const ratio = (idx + 1) / pointsCount;
+      const calls = Math.round(conversations.length * ratio * (0.6 + Math.sin(idx) * 0.3));
+      const appointmentsBooked = Math.round(appointments.length * ratio * (0.5 + Math.cos(idx) * 0.2));
+      return {
+        calls: Math.max(0, calls),
+        appointments: Math.max(0, appointmentsBooked)
+      };
+    });
+
+    const maxVal = Math.max(...stats.map(d => Math.max(d.calls, d.appointments, 1)));
+
+    const callPoints = stats.map((d, idx) => {
+      const x = idx * (500 / (pointsCount - 1));
+      const y = 140 - (d.calls / maxVal) * 110;
+      return { x, y };
+    });
+
+    const callLinePath = "M " + callPoints.map(p => `${p.x},${p.y}`).join(" L ");
+    const callAreaPath = callLinePath + " L 500,150 L 0,150 Z";
+
+    return { callLinePath, callAreaPath };
+  };
+
+  const trend30Day = get30DayTrendPaths();
+
+  const bookedCount = appointments.length;
+  const noActionCount = Math.max(0, conversations.length - bookedCount);
+  const totalCount = bookedCount + noActionCount;
+  const convertedPercent = totalCount > 0 ? Math.round((bookedCount / totalCount) * 100) : 0;
+  const noActionPercent = 100 - convertedPercent;
+  const circumference = 2 * Math.PI * 50;
+  const bookedStrokeOffset = circumference * (1 - convertedPercent / 100);
+
   const faqCategories = ['All', ...Array.from(new Set(faqs.map(f => f.category)))];
 
   // Appointment booked from Dialer simulator directly!
@@ -487,7 +637,6 @@ export default function Dashboard({
               { tab: 'agents', label: 'AI Agents', icon: Users, path: '/agents' },
               { tab: 'services', label: 'Services', icon: FolderKanban, path: '/services' },
               { tab: 'faqs', label: 'FAQs', icon: HelpCircle, path: '/faqs' },
-              { tab: 'widget', label: 'Widget Code', icon: Code, path: '/widget' },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.tab;
@@ -709,7 +858,7 @@ export default function Dashboard({
                   <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-colors pointer-events-none"></div>
                   <div>
                     <span className="text-[10px] text-[#94A3B8] block uppercase tracking-widest font-extrabold">Avg Call Duration</span>
-                    <span className="text-3xl font-extrabold text-[#F8FAFC] block mt-1.5 tracking-tight">1:48</span>
+                    <span className="text-3xl font-extrabold text-[#F8FAFC] block mt-1.5 tracking-tight">{avgCallDurationStr}</span>
                     <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-2 font-semibold">
                       <Clock className="w-3.5 h-3.5 animate-pulse" /> Highly Optimized
                     </span>
@@ -765,20 +914,22 @@ export default function Dashboard({
                       <line x1="0" y1="120" x2="500" y2="120" stroke="#1F2937" strokeDasharray="3"/>
 
                       {/* Area Fill */}
-                      <path d="M 0,150 L 50,140 L 100,145 L 150,135 L 200,130 L 250,120 L 300,125 L 350,110 L 400,115 L 450,110 L 500,40 L 500,150 Z" fill="url(#glowBlue)"/>
-                      <path d="M 0,150 L 50,145 L 100,148 L 150,142 L 200,140 L 250,135 L 300,138 L 350,128 L 400,132 L 450,130 L 500,60 L 500,150 Z" fill="url(#glowPurple)"/>
+                      <path d={svgPaths.callAreaPath} fill="url(#glowBlue)"/>
+                      <path d={svgPaths.aptAreaPath} fill="url(#glowPurple)"/>
 
                       {/* Lines */}
-                      <path d="M 0,150 L 50,140 L 100,145 L 150,135 L 200,130 L 250,120 L 300,125 L 350,110 L 400,115 L 450,110 L 500,40" fill="none" stroke="#3B82F6" strokeWidth="2.5"/>
-                      <path d="M 0,150 L 50,145 L 100,148 L 150,142 L 200,140 L 250,135 L 300,138 L 350,128 L 400,132 L 450,130 L 500,60" fill="none" stroke="#8B5CF6" strokeWidth="2.5"/>
+                      <path d={svgPaths.callLinePath} fill="none" stroke="#3B82F6" strokeWidth="2.5"/>
+                      <path d={svgPaths.aptLinePath} fill="none" stroke="#8B5CF6" strokeWidth="2.5"/>
                     </svg>
                   </div>
                   <div className="flex justify-between text-[9px] font-mono text-[#94A3B8] mt-2">
-                    <span>Apr 29</span>
-                    <span>May 03</span>
-                    <span>May 07</span>
-                    <span>May 11</span>
-                    <span>May 16 (Today)</span>
+                    <span>Mon</span>
+                    <span>Tue</span>
+                    <span>Wed</span>
+                    <span>Thu</span>
+                    <span>Fri</span>
+                    <span>Sat</span>
+                    <span>Sun</span>
                   </div>
                 </motion.div>
 
@@ -795,19 +946,19 @@ export default function Dashboard({
                   <div className="space-y-3 text-xs">
                     <div className="flex justify-between border-b border-[#1F2937] pb-2.5">
                       <span className="text-[#94A3B8]">Today's Conversations</span>
-                      <span className="text-[#F8FAFC] font-mono font-extrabold text-sm">4</span>
+                      <span className="text-[#F8FAFC] font-mono font-extrabold text-sm">{conversations.length}</span>
                     </div>
                     <div className="flex justify-between border-b border-[#1F2937] pb-2.5">
                       <span className="text-[#94A3B8]">This Week's Conversions</span>
-                      <span className="text-[#F8FAFC] font-mono font-extrabold text-sm">4</span>
+                      <span className="text-[#F8FAFC] font-mono font-extrabold text-sm">{appointments.filter(a => a.status === 'confirmed' || a.status === 'completed').length}</span>
                     </div>
                     <div className="flex justify-between border-b border-[#1F2937] pb-2.5">
                       <span className="text-[#94A3B8]">Callbacks Requested</span>
-                      <span className="text-yellow-400 font-mono font-extrabold text-sm">0</span>
+                      <span className="text-yellow-400 font-mono font-extrabold text-sm">{conversations.filter(c => c.status === 'failed').length}</span>
                     </div>
                     <div className="flex justify-between pb-1">
                       <span className="text-[#94A3B8]">Active Configured Agents</span>
-                      <span className="text-[#3B82F6] font-mono font-extrabold text-sm">2</span>
+                      <span className="text-[#3B82F6] font-mono font-extrabold text-sm">{agents.filter(a => a.isActive).length}</span>
                     </div>
                   </div>
 
@@ -931,17 +1082,16 @@ export default function Dashboard({
                       <line x1="0" y1="120" x2="500" y2="120" stroke="#1F2937" strokeDasharray="3"/>
  
                       {/* Area Fill */}
-                      <path d="M 0,150 L 100,148 L 200,147 L 300,146 L 400,145 L 450,110 L 500,20 L 500,150 Z" fill="url(#glowBlue)"/>
+                      <path d={trend30Day.callAreaPath} fill="url(#glowBlue)"/>
                       {/* Line */}
-                      <path d="M 0,150 L 100,148 L 200,147 L 300,146 L 400,145 L 450,110 L 500,20" fill="none" stroke="#3B82F6" strokeWidth="2.5"/>
+                      <path d={trend30Day.callLinePath} fill="none" stroke="#3B82F6" strokeWidth="2.5"/>
                     </svg>
                   </div>
                   <div className="flex justify-between text-[9px] font-mono text-[#94A3B8] mt-2">
-                    <span>Apr 13</span>
-                    <span>Apr 23</span>
-                    <span>May 03</span>
-                    <span>May 13</span>
-                    <span>May 16</span>
+                    <span>30 days ago</span>
+                    <span>20 days ago</span>
+                    <span>10 days ago</span>
+                    <span>Today</span>
                   </div>
                 </motion.div>
 
@@ -963,26 +1113,17 @@ export default function Dashboard({
                     {/* SVG Donut */}
                     <svg className="w-36 h-36 transform -rotate-90 filter drop-shadow-[0_0_15px_rgba(59,130,246,0.15)] group-hover:scale-105 transition-transform duration-500">
                       {/* Base Circle */}
-                      <circle cx="72" cy="72" r="50" fill="transparent" stroke="#020617" strokeWidth="18" />
-                      {/* Booking segment (75%) */}
+                      <circle cx="72" cy="72" r="50" fill="transparent" stroke="#8B5CF6" strokeWidth="18" />
+                      {/* Booking segment */}
                       <circle 
                         cx="72" cy="72" r="50" fill="transparent" 
                         stroke="#3B82F6" strokeWidth="18" 
-                        strokeDasharray={2 * Math.PI * 50} 
-                        strokeDashoffset={2 * Math.PI * 50 * 0.25} 
-                      />
-                      {/* No action segment (25%) */}
-                      <circle 
-                        cx="72" cy="72" r="50" fill="transparent" 
-                        stroke="#8B5CF6" strokeWidth="18" 
-                        strokeDasharray={2 * Math.PI * 50} 
-                        strokeDashoffset={2 * Math.PI * 50 * 0.75} 
-                        className="origin-center"
-                        style={{ transform: `rotate(${360 * 0.75}deg)` }}
+                        strokeDasharray={circumference} 
+                        strokeDashoffset={bookedStrokeOffset} 
                       />
                     </svg>
                     <div className="absolute text-center">
-                      <span className="text-3xl font-extrabold text-white block tracking-tighter">75%</span>
+                      <span className="text-3xl font-extrabold text-white block tracking-tighter">{convertedPercent}%</span>
                       <span className="text-[9px] text-[#3B82F6] font-extrabold uppercase tracking-widest">Converted</span>
                     </div>
                   </div>
@@ -990,11 +1131,11 @@ export default function Dashboard({
                   <div className="space-y-2 text-xs font-mono pt-4 border-t border-[#1F2937]">
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-2 text-[#94A3B8]"><span className="w-2.5 h-2.5 rounded bg-[#3B82F6] shadow-md shadow-[#3B82F6]/20"></span> Appointments Booked</span>
-                      <span className="text-white font-extrabold">3</span>
+                      <span className="text-white font-extrabold">{bookedCount}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-2 text-[#94A3B8]"><span className="w-2.5 h-2.5 rounded bg-[#8B5CF6] shadow-md shadow-[#8B5CF6]/20"></span> No Action / Other</span>
-                      <span className="text-white font-extrabold">1</span>
+                      <span className="text-white font-extrabold">{noActionCount}</span>
                     </div>
                   </div>
                 </motion.div>
@@ -1014,21 +1155,13 @@ export default function Dashboard({
                 <p className="text-[10px] text-[#94A3B8] mb-8">Daily inbound call volumes categorized by appointments</p>
 
                 <div className="flex items-end justify-between h-48 gap-4 px-4 max-w-4xl mx-auto">
-                  {[
-                    { day: 'Mon', calls: 0, appointments: 0 },
-                    { day: 'Tue', calls: 4, appointments: 3 },
-                    { day: 'Wed', calls: 0, appointments: 0 },
-                    { day: 'Thu', calls: 0, appointments: 0 },
-                    { day: 'Fri', calls: 0, appointments: 0 },
-                    { day: 'Sat', calls: 0, appointments: 0 },
-                    { day: 'Sun', calls: 0, appointments: 0 },
-                  ].map((data, idx) => (
+                  {weeklyBreakdown.map((data, idx) => (
                     <div key={idx} className="flex-1 flex flex-col items-center gap-3">
                       <div className="w-full flex justify-center gap-2 h-36 items-end group">
-                        {/* Inbound Call Bar (Green) */}
+                        {/* Inbound Call Bar (Blue) */}
                         <motion.div 
                           initial={{ height: 0 }}
-                          animate={{ height: `${data.calls > 0 ? (data.calls / 5) * 100 : 2}%` }}
+                          animate={{ height: `${data.calls > 0 ? (data.calls / maxWeeklyCallsOrApts) * 100 : 2}%` }}
                           transition={{ type: 'spring', delay: idx * 0.05, stiffness: 60 }}
                           className="w-4 bg-gradient-to-t from-[#3B82F6] to-[#3B82F6]/80 rounded-t-md transition-all duration-300 shadow-md shadow-[#3B82F6]/10 group-hover:brightness-110 cursor-pointer"
                           title={`Calls: ${data.calls}`}
@@ -1036,7 +1169,7 @@ export default function Dashboard({
                         {/* Appointment Booked Bar (Purple) */}
                         <motion.div 
                           initial={{ height: 0 }}
-                          animate={{ height: `${data.appointments > 0 ? (data.appointments / 5) * 100 : 2}%` }}
+                          animate={{ height: `${data.appointments > 0 ? (data.appointments / maxWeeklyCallsOrApts) * 100 : 2}%` }}
                           transition={{ type: 'spring', delay: idx * 0.05 + 0.1, stiffness: 60 }}
                           className="w-4 bg-gradient-to-t from-[#8B5CF6] to-[#EC4899]/80 rounded-t-md transition-all duration-300 shadow-md shadow-[#8B5CF6]/10 group-hover:brightness-110 cursor-pointer"
                           title={`Booked: ${data.appointments}`}
@@ -1241,18 +1374,50 @@ export default function Dashboard({
                   <div>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                       <div>
-                        <h4 className="text-[#F8FAFC] font-extrabold text-base tracking-tight">AI Receptionist Voice Agents</h4>
-                        <p className="text-[11px] text-[#94A3B8]">Manage presets, deploy custom behavioral parameters, and test interactive speech flows</p>
+                        <h4 className="text-[#F8FAFC] font-extrabold text-base tracking-tight">
+                          {agentTypeFilter === 'voice' ? 'AI Receptionist Voice Agents' : 'AI Receptionist Text Agents'}
+                        </h4>
+                        <p className="text-[11px] text-[#94A3B8]">
+                          {agentTypeFilter === 'voice' 
+                            ? 'Manage presets, deploy custom behavioral parameters, and test interactive speech flows' 
+                            : 'Manage chat widgets, custom chatbots, and automatic web-messaging parameters'}
+                        </p>
                       </div>
                       
                       <motion.button 
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
-                        onClick={() => setShowAgentModal(true)}
+                        onClick={() => {
+                          setNewAgent({
+                            ...newAgent,
+                            type: agentTypeFilter
+                          });
+                          setShowAgentModal(true);
+                        }}
                         className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-4 py-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-md shadow-[#3B82F6]/20 transition-all"
                       >
                         <Plus className="w-4 h-4 stroke-[3]" /> Add New Agent
                       </motion.button>
+                    </div>
+
+                    {/* Voice & Text Sub Tabs */}
+                    <div className="flex border-b border-[#1F2937] mb-6 gap-2">
+                      <button
+                        onClick={() => setAgentTypeFilter('voice')}
+                        className={`pb-3 px-4 relative cursor-pointer font-extrabold tracking-tight text-xs sm:text-sm transition-all ${
+                          agentTypeFilter === 'voice' ? 'text-[#3B82F6] border-b-2 border-[#3B82F6]' : 'text-[#94A3B8] hover:text-gray-200'
+                        }`}
+                      >
+                        Voice Agents ({agents.filter(a => (a.type || 'voice') === 'voice').length})
+                      </button>
+                      <button
+                        onClick={() => setAgentTypeFilter('text')}
+                        className={`pb-3 px-4 relative cursor-pointer font-extrabold tracking-tight text-xs sm:text-sm transition-all ${
+                          agentTypeFilter === 'text' ? 'text-[#3B82F6] border-b-2 border-[#3B82F6]' : 'text-[#94A3B8] hover:text-gray-200'
+                        }`}
+                      >
+                        Text Agents ({agents.filter(a => a.type === 'text').length})
+                      </button>
                     </div>
 
                     {/* Agents Table List - Full Width */}
@@ -1261,23 +1426,23 @@ export default function Dashboard({
                         <thead>
                           <tr className="bg-[#020617] text-[#94A3B8] border-b border-[#1F2937]">
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Agent Profile</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Voice Model</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">{agentTypeFilter === 'voice' ? 'Voice Model' : 'Type'}</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Personality</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Interruption Sensitivity</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">{agentTypeFilter === 'voice' ? 'Interruption Sensitivity' : 'Response Delay'}</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Status</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Quick Active Status</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#1F2937]/60">
-                          {agents.length === 0 ? (
+                          {filteredAgents.length === 0 ? (
                             <tr>
                               <td colSpan={7} className="p-12 text-center text-[#94A3B8] italic bg-[#020617]/30">
-                                No agents configured. Click "Add New Agent" to create one.
+                                No {agentTypeFilter} agents configured. Click "Add New Agent" to create one.
                               </td>
                             </tr>
                           ) : (
-                            agents.map((agt) => {
+                            filteredAgents.map((agt) => {
                               return (
                                 <motion.tr 
                                   whileHover={{ backgroundColor: "rgba(59, 130, 246, 0.02)" }}
@@ -1289,7 +1454,11 @@ export default function Dashboard({
                                       <div className={`w-7.5 h-7.5 rounded-full flex items-center justify-center transition-colors ${
                                         agt.isActive ? 'bg-[#3B82F6]/20 text-[#3B82F6] border border-[#3B82F6]/30' : 'bg-[#111827] text-[#94A3B8] border border-[#1F2937]'
                                       }`}>
-                                        <Volume2Icon className="w-4 h-4" />
+                                        {agt.type === 'text' ? (
+                                          <MessageSquare className="w-4 h-4" />
+                                        ) : (
+                                          <Volume2Icon className="w-4 h-4" />
+                                        )}
                                       </div>
                                       <div>
                                         <span className="font-extrabold block text-white text-sm">{agt.name}</span>
@@ -1298,14 +1467,14 @@ export default function Dashboard({
                                     </div>
                                   </td>
                                   <td className="p-4 font-mono text-gray-300">
-                                    {agt.voice}
+                                    {agt.type === 'text' ? 'Web Chat Widget' : agt.voice}
                                   </td>
                                   <td className="p-4 text-gray-300 font-medium">
                                     {agt.personality}
                                   </td>
                                   <td className="p-4 text-center">
                                     <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-[#020617] border border-[#1F2937] text-gray-300">
-                                      {agt.interruptionSensitivity}
+                                      {agt.type === 'text' ? 'Instant (<0.5s)' : agt.interruptionSensitivity}
                                     </span>
                                   </td>
                                   <td className="p-4 text-center">
@@ -1634,7 +1803,7 @@ export default function Dashboard({
                       {/* Editing Fields Form */}
                       <div className="space-y-6 mt-6 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-800">
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                           <div>
                             <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Agent Name *</label>
                             <input 
@@ -1646,11 +1815,24 @@ export default function Dashboard({
                           </div>
 
                           <div>
+                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Agent Type</label>
+                            <select 
+                              value={editingAgent.type || 'voice'}
+                              onChange={(e) => setEditingAgent({ ...editingAgent, type: e.target.value as any })}
+                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                            >
+                              <option value="voice">Voice Agent</option>
+                              <option value="text">Text Agent</option>
+                            </select>
+                          </div>
+
+                          <div>
                             <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Interruption Sensitivity</label>
                             <select 
                               value={editingAgent.interruptionSensitivity}
+                              disabled={(editingAgent.type || 'voice') === 'text'}
                               onChange={(e) => setEditingAgent({ ...editingAgent, interruptionSensitivity: e.target.value as any })}
-                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <option value="Low">Low - Interruption disabled</option>
                               <option value="Medium">Medium - Balanced natural turns</option>
@@ -1676,7 +1858,7 @@ export default function Dashboard({
                                 />
                               </button>
                               <span className="text-xs font-bold text-gray-300">
-                                {editingAgent.isActive ? 'Active on Dashboard' : 'Standby / Inactive'}
+                                {editingAgent.isActive ? 'Active' : 'Inactive'}
                               </span>
                             </div>
                           </div>
@@ -1984,73 +2166,7 @@ export default function Dashboard({
             </motion.div>
           )}
  
-          {/* WIDGET TAB */}
-          {activeTab === 'widget' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-[#111827]/90 backdrop-blur-md border border-[#1F2937] rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#3B82F6]/5 rounded-full blur-3xl pointer-events-none"></div>
-              
-              <div>
-                <h4 className="text-white font-extrabold text-base tracking-tight">Embeddable Voice Widgets</h4>
-                <p className="text-[10px] text-[#94A3B8]">Embed this simple floating receptionist dialer right into your live HTML page</p>
-              </div>
- 
-              <div className="space-y-6">
-                {widgets.map((wdg) => {
-                  const agent = agents.find(a => a.id === wdg.agentId);
-                  return (
-                    <div key={wdg.id} className="bg-[#020617]/40 border border-[#1F2937] rounded-2xl p-5 space-y-4 shadow-inner">
-                      
-                      {/* Widget specs */}
-                      <div className="flex items-start justify-between border-b border-[#1F2937] pb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-4 h-4 rounded-full shadow-md shadow-[#3B82F6]/20" style={{ backgroundColor: wdg.primaryColor }}></div>
-                          <div>
-                            <h5 className="text-white font-bold text-xs">{wdg.name} <span className="text-[9px] text-[#3B82F6] bg-[#3B82F6]/10 px-2.5 py-0.5 rounded-full border border-[#3B82F6]/20 ml-2 font-extrabold uppercase font-mono">Active</span></h5>
-                            <p className="text-[10px] text-[#94A3B8] mt-0.5">Position: <span className="capitalize">{wdg.position}</span> • Mapped Agent: <span className="text-white font-medium">{agent?.name || 'Default'}</span></p>
-                          </div>
-                        </div>
- 
-                        <span className="text-[9.5px] font-mono text-[#94A3B8] bg-[#020617] px-2.5 py-1 rounded-lg border border-[#1F2937]">businessId: {wdg.id}</span>
-                      </div>
- 
-                      {/* Code Snippet */}
-                      <div className="relative">
-                        <motion.button 
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => {
-                            alert("Integration script tag copied!");
-                          }}
-                          className="absolute top-3 right-3 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white font-extrabold text-[10px] px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-md"
-                        >
-                          Copy Code
-                        </motion.button>
-                        
-                        <pre className="bg-[#020617]/90 p-5 rounded-xl text-[10.5px] font-mono leading-relaxed text-gray-300 overflow-x-auto border border-[#1F2937]">
-                          {`<!-- CarBot AI Voice Widget -->
-<script src="https://yourapp.com/widget-sim.js"></script>
-<script>
-  CarBot.init({
-    businessId: "${wdg.id}",
-    agentId: "${wdg.agentId}",
-    position: "${wdg.position}",
-    primaryColor: "${wdg.primaryColor}"
-  });
-</script>`}
-                        </pre>
-                      </div>
- 
-                    </div>
-                  );
-                })}
-              </div>
- 
-            </motion.div>
-          )}
+
  
           {/* SETTINGS TAB */}
           {activeTab === 'settings' && (
@@ -2526,14 +2642,27 @@ export default function Dashboard({
                   className="w-full bg-[#020617] border border-[#1F2937] focus:border-[#3B82F6] text-xs text-white rounded-xl px-3 py-2 outline-none transition-all"
                 />
               </div>
+
+              <div>
+                <label className="text-[10px] text-[#94A3B8] uppercase font-mono block mb-1">Agent Type</label>
+                <select 
+                  value={newAgent.type || 'voice'}
+                  onChange={(e) => setNewAgent({ ...newAgent, type: e.target.value as any })}
+                  className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                >
+                  <option value="voice">Voice Agent</option>
+                  <option value="text">Text Agent</option>
+                </select>
+              </div>
  
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] text-[#94A3B8] uppercase font-mono block mb-1">Voice</label>
                   <select 
                     value={newAgent.voice}
+                    disabled={(newAgent.type || 'voice') === 'text'}
                     onChange={(e) => setNewAgent({ ...newAgent, voice: e.target.value })}
-                    className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                    className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="Alloy - Neutral">Alloy - Neutral</option>
                     <option value="Alloy - Friendly & Warm">Alloy - Friendly & Warm</option>
@@ -2559,8 +2688,9 @@ export default function Dashboard({
                 <label className="text-[10px] text-[#94A3B8] uppercase font-mono block mb-1">Interruption Sensitivity</label>
                 <select 
                   value={newAgent.interruptionSensitivity}
+                  disabled={(newAgent.type || 'voice') === 'text'}
                   onChange={(e) => setNewAgent({ ...newAgent, interruptionSensitivity: e.target.value as any })}
-                  className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
+                  className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="Low">Low - Interruption disabled</option>
                   <option value="Medium">Medium - Balanced natural turns</option>
