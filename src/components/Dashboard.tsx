@@ -5,7 +5,7 @@ import {
   HelpCircle, Code, LogOut, ChevronRight, Plus, Search, Filter, 
   TrendingUp, Play, Edit, Trash2, CheckCircle2, Clock, MapPin, 
   Mail, Phone, RefreshCw, Star, Info, ShieldAlert, Sparkles, X, ChevronDown, Check,
-  Sliders, Eye, EyeOff
+  Sliders, Eye, EyeOff, Menu
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Appointment, Conversation, AIAgent, Service, FAQ, WidgetConfig, BusinessProfile, BusinessHours } from '../types';
@@ -41,6 +41,7 @@ export default function Dashboard({
 }: DashboardProps) {
   
   const navigate = useNavigate();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Modals state
   const [showAptModal, setShowAptModal] = useState(false);
@@ -676,12 +677,20 @@ export default function Dashboard({
       <div className="absolute top-[-20%] left-[-10%] w-[45%] h-[40%] bg-[#3B82F6]/8 rounded-full blur-[140px] pointer-events-none"></div>
       <div className="absolute bottom-[10%] right-[-10%] w-[45%] h-[45%] bg-[#8B5CF6]/8 rounded-full blur-[160px] pointer-events-none"></div>
 
+      {/* MOBILE BACKDROP OVERLAY */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR NAVIGATION */}
-      <aside className="w-full md:w-64 bg-[#020617] border-r border-[#1F2937] flex flex-col justify-between shrink-0 relative z-20 shadow-2xl shadow-black/50">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#020617] border-r border-[#1F2937] flex flex-col justify-between shrink-0 shadow-2xl transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div>
           {/* Sidebar Header */}
           <div className="p-5 border-b border-[#1F2937] flex items-center justify-between bg-[#020617]">
-            <div className="flex items-center gap-2.5 group cursor-pointer" onClick={() => navigate('/')}>
+            <div className="flex items-center gap-2.5 group cursor-pointer" onClick={() => { navigate('/'); setIsMobileMenuOpen(false); }}>
               <motion.div 
                 whileHover={{ rotate: 12, scale: 1.05 }}
                 className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3B82F6]/20 to-[#8B5CF6]/20 border border-[#3B82F6]/30 flex items-center justify-center shadow-lg shadow-[#3B82F6]/10"
@@ -693,9 +702,17 @@ export default function Dashboard({
                 <span className="text-[9px] text-[#94A3B8] block uppercase tracking-widest font-bold">Voice Platform</span>
               </div>
             </div>
-            <span className="text-[8px] font-mono font-bold text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5 rounded border border-[#3B82F6]/20 animate-pulse">
-              Active
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[8px] font-mono font-bold text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5 rounded border border-[#3B82F6]/20">
+                Active
+              </span>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/40 md:hidden cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Profile Selector */}
@@ -726,7 +743,7 @@ export default function Dashboard({
               return (
                 <button 
                   key={item.tab}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => { navigate(item.path); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer group ${
                     isActive 
                       ? 'bg-gradient-to-r from-[#3B82F6]/15 to-[#8B5CF6]/5 text-[#3B82F6] font-bold border border-[#3B82F6]/25 shadow-sm shadow-[#3B82F6]/5' 
@@ -759,7 +776,7 @@ export default function Dashboard({
               return (
                 <button 
                   key={item.tab}
-                  onClick={() => navigate(item.path)}
+                  onClick={() => { navigate(item.path); setIsMobileMenuOpen(false); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer group ${
                     isActive 
                       ? 'bg-gradient-to-r from-[#3B82F6]/15 to-[#8B5CF6]/5 text-[#3B82F6] font-bold border border-[#3B82F6]/25 shadow-sm shadow-[#3B82F6]/5' 
@@ -783,7 +800,7 @@ export default function Dashboard({
             <div className="pt-4 px-3 py-1.5 text-[9px] text-[#94A3B8]/60 font-extrabold uppercase tracking-widest">Account & Settings</div>
 
             <button 
-              onClick={() => navigate('/settings')}
+              onClick={() => { navigate('/settings'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer group ${
                 activeTab === 'settings' 
                   ? 'bg-gradient-to-r from-[#3B82F6]/15 to-[#8B5CF6]/5 text-[#3B82F6] font-bold border border-[#3B82F6]/25 shadow-sm shadow-[#3B82F6]/5' 
@@ -820,14 +837,24 @@ export default function Dashboard({
       <main className="flex-1 overflow-y-auto md:h-screen flex flex-col bg-transparent relative z-10">
         
         {/* Workspace Topbar */}
-        <header className="h-16 border-b border-[#1F2937] bg-[#0B1120]/80 backdrop-blur-md px-6 flex items-center justify-between shrink-0">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-[#F8FAFC] font-extrabold text-sm capitalize tracking-tight">{activeTab}</h2>
-              <span className="w-1 h-1 rounded-full bg-gray-600"></span>
-              <span className="text-[10px] text-[#3B82F6] font-bold font-mono tracking-wider">VoiceDesk AI Platform v2.0</span>
+        <header className="h-16 border-b border-[#1F2937] bg-[#0B1120]/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Hamburger Button */}
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/40 md:hidden cursor-pointer"
+            >
+              <Menu className="w-5.5 h-5.5" />
+            </button>
+
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-[#F8FAFC] font-extrabold text-sm capitalize tracking-tight">{activeTab}</h2>
+                <span className="w-1 h-1 rounded-full bg-gray-600"></span>
+                <span className="text-[10px] text-[#3B82F6] font-bold font-mono tracking-wider">VoiceDesk AI Platform v2.0</span>
+              </div>
+              <p className="text-[10px] text-[#94A3B8] font-medium hidden sm:block">Workspace configuration & live voice logs</p>
             </div>
-            <p className="text-[10px] text-[#94A3B8] font-medium">Workspace configuration & live voice logs</p>
           </div>
 
           <div className="flex items-center gap-4">
