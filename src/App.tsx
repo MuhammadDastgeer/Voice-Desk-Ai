@@ -143,6 +143,19 @@ export default function App() {
 
           const dbFaqs = await supabaseService.getFAQs(userId);
           setFaqs(dbFaqs);
+
+          const dbAgents = await supabaseService.getAgents(userId);
+          if (dbAgents && dbAgents.length > 0) {
+            setAgents(dbAgents);
+          } else {
+            // Seed initial agents to Supabase on first login
+            const seededAgents: AIAgent[] = [];
+            for (const agent of INITIAL_AGENTS) {
+              const saved = await supabaseService.saveAgent(userId, agent);
+              seededAgents.push(saved);
+            }
+            setAgents(seededAgents);
+          }
         } catch (err) {
           console.error('Error loading data from Supabase:', err);
         }
@@ -225,6 +238,7 @@ export default function App() {
           setAppointments([]);
           setServices([]);
           setFaqs([]);
+          setAgents([]);
         }}
       />
     );

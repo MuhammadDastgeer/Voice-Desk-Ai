@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { BusinessProfile, BusinessHours, Appointment, Service, FAQ } from '../types';
+import { BusinessProfile, BusinessHours, Appointment, Service, FAQ, AIAgent } from '../types';
 
 // Retrieve environment variables
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
@@ -766,6 +766,137 @@ export const supabaseService = {
       const current = await this.getFAQs(userId);
       const filtered = current.filter(f => f.id !== faqId);
       localStorage.setItem(`vd_faqs_${userId}`, JSON.stringify(filtered));
+      return true;
+    }
+  },
+
+  // 19. Get Agents
+  async getAgents(userId: string): Promise<AIAgent[]> {
+    if (isConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching agents:', error.message);
+        return [];
+      }
+      
+      return (data || []).map(row => ({
+        id: row.id,
+        name: row.name,
+        voice: row.voice,
+        personality: row.personality,
+        interruptionSensitivity: row.interruption_sensitivity as any,
+        greetingMessage: row.greeting_message,
+        systemPrompt: row.system_prompt,
+        isActive: row.is_active,
+        type: row.type as any
+      }));
+    } else {
+      // Sandbox Simulation
+      const saved = localStorage.getItem(`vd_agents_${userId}`);
+      return saved ? JSON.parse(saved) : [];
+    }
+  },
+
+  // 20. Save Agent (Create/Update)
+  async saveAgent(userId: string, agent: AIAgent): Promise<AIAgent> {
+    if (isConfigured && supabase) {
+      // If agent.id is missing or looks like a temp client mock ID, treat as new
+      const isNew = !agent.id || agent.id.startsWith('agt-') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agent.id);
+      
+      const payload: any = {
+        user_id: userId,
+        name: agent.name,
+        voice: agent.voice,
+        personality: agent.personality,
+        interruption_sensitivity: agent.interruptionSensitivity,
+        greeting_message: agent.greetingMessage,
+        system_prompt: agent.systemPrompt,
+        is_active: agent.isActive,
+        type: agent.type || 'voice'
+      };
+
+      if (isNew) {
+        const { data, error } = await supabase
+          .from('agents')
+          .insert([payload])
+          .select()
+          .single();
+
+        if (error) throw error;
+        return {
+          id: data.id,
+          name: data.name,
+          voice: data.voice,
+          personality: data.personality,
+          interruptionSensitivity: data.interruption_sensitivity as any,
+          greetingMessage: data.greeting_message,
+          systemPrompt: data.system_prompt,
+          isActive: data.is_active,
+          type: data.type as any
+        };
+      } else {
+        const { data, error } = await supabase
+          .from('agents')
+          .update(payload)
+          .eq('id', agent.id)
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return {
+          id: data.id,
+          name: data.name,
+          voice: data.voice,
+          personality: data.personality,
+          interruptionSensitivity: data.interruption_sensitivity as any,
+          greetingMessage: data.greeting_message,
+          systemPrompt: data.system_prompt,
+          isActive: data.is_active,
+          type: data.type as any
+        };
+      }
+    } else {
+      // Sandbox Simulation
+      const current = await this.getAgents(userId);
+      let updatedAgent = { ...agent };
+      if (!updatedAgent.id || updatedAgent.id.startsWith('agt-') === false) {
+        updatedAgent.id = 'agt-mock-' + Math.random().toString(36).substr(2, 9);
+      }
+      
+      const index = current.findIndex(a => a.id === updatedAgent.id);
+      if (index !== -1) {
+        current[index] = updatedAgent;
+      } else {
+        current.push(updatedAgent);
+      }
+      
+      localStorage.setItem(`vd_agents_${userId}`, JSON.stringify(current));
+      return updatedAgent;
+    }
+  },
+
+  // 21. Delete Agent
+  async deleteAgent(userId: string, agentId: string): Promise<boolean> {
+    if (isConfigured && supabase) {
+      const { error } = await supabase
+        .from('agents')
+        .delete()
+        .eq('id', agentId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+      return true;
+    } else {
+      // Sandbox Simulation
+      const current = await this.getAgents(userId);
+      const filtered = current.filter(a => a.id !== agentId);
+      localStorage.setItem(`vd_agents_${userId}`, JSON.stringify(filtered));
       return true;
     }
   }

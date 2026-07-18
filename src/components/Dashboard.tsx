@@ -87,7 +87,6 @@ export default function Dashboard({
   });
 
   const [settingsTab, setSettingsTab] = useState<'profile' | 'hours' | 'security'>('profile');
-  const [agentTypeFilter, setAgentTypeFilter] = useState<'voice' | 'text'>('voice');
 
   // Change password states
   const [oldPassword, setOldPassword] = useState('');
@@ -187,31 +186,38 @@ export default function Dashboard({
   };
 
   // Create agent
-  const handleCreateAgent = (e: React.FormEvent) => {
+  const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAgent.name) return;
 
-    const formattedAgent: AIAgent = {
-      id: `agt-${Date.now()}`,
-      name: newAgent.name,
-      voice: newAgent.voice || 'Alloy - Neutral',
-      personality: newAgent.personality || 'Professional',
-      interruptionSensitivity: (newAgent.interruptionSensitivity as any) || 'Medium',
-      greetingMessage: newAgent.greetingMessage || 'Hello! Thank you for calling...',
-      systemPrompt: newAgent.systemPrompt || 'You are a professional assistant...',
-      isActive: true,
-      type: newAgent.type || agentTypeFilter
-    };
+    try {
+      const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+      const formattedAgent: AIAgent = {
+        id: `agt-${Date.now()}`,
+        name: newAgent.name,
+        voice: newAgent.voice || 'Alloy - Neutral',
+        personality: newAgent.personality || 'Professional',
+        interruptionSensitivity: (newAgent.interruptionSensitivity as any) || 'Medium',
+        greetingMessage: newAgent.greetingMessage || 'Hello! Thank you for calling...',
+        systemPrompt: newAgent.systemPrompt || 'You are a professional assistant...',
+        isActive: true,
+        type: newAgent.type || 'voice'
+      };
 
-    onUpdateAgents([...agents, formattedAgent]);
-    setSelectedAgentForStudio(formattedAgent);
-    setShowAgentModal(false);
-    setNewAgent({
-      name: '', voice: 'Alloy - Neutral', personality: 'Professional', interruptionSensitivity: 'Medium',
-      greetingMessage: 'Hello! Thank you for calling... How can I assist you?',
-      systemPrompt: 'You are a professional auto repair assistant...',
-      type: 'voice'
-    });
+      const savedAgent = await supabaseService.saveAgent(userId, formattedAgent);
+      onUpdateAgents([...agents, savedAgent]);
+      setSelectedAgentForStudio(savedAgent);
+      setShowAgentModal(false);
+      setNewAgent({
+        name: '', voice: 'Alloy - Neutral', personality: 'Professional', interruptionSensitivity: 'Medium',
+        greetingMessage: 'Hello! Thank you for calling... How can I assist you?',
+        systemPrompt: 'You are a professional auto repair assistant...',
+        type: 'voice'
+      });
+    } catch (err: any) {
+      console.error('Error creating agent:', err);
+      alert('Error creating agent: ' + err.message);
+    }
   };
 
   // Create / Update service
@@ -301,10 +307,19 @@ export default function Dashboard({
     }
   };
 
-  const deleteAgent = (id: string) => {
-    onUpdateAgents(agents.filter(a => a.id !== id));
-    if (selectedAgentForStudio?.id === id) {
-      setSelectedAgentForStudio(agents.find(a => a.id !== id) || null);
+  const deleteAgent = async (id: string) => {
+    if (confirm("Are you sure you want to delete this agent?")) {
+      try {
+        const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+        await supabaseService.deleteAgent(userId, id);
+        onUpdateAgents(agents.filter(a => a.id !== id));
+        if (selectedAgentForStudio?.id === id) {
+          setSelectedAgentForStudio(agents.find(a => a.id !== id) || null);
+        }
+      } catch (err: any) {
+        console.error('Error deleting agent:', err);
+        alert('Error deleting agent: ' + err.message);
+      }
     }
   };
 
@@ -354,7 +369,7 @@ export default function Dashboard({
     ? faqs 
     : faqs.filter(f => f.category.toLowerCase() === faqCategoryFilter.toLowerCase());
 
-  const filteredAgents = agents.filter(agt => (agt.type || 'voice') === agentTypeFilter);
+  const filteredAgents = agents.filter(agt => (agt.type || 'voice') === 'voice');
 
   // Dynamic statistics calculations for Overview & Analytics tabs
   const parseDurationToSeconds = (durationStr: string): number => {
@@ -1375,12 +1390,10 @@ export default function Dashboard({
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                       <div>
                         <h4 className="text-[#F8FAFC] font-extrabold text-base tracking-tight">
-                          {agentTypeFilter === 'voice' ? 'AI Receptionist Voice Agents' : 'AI Receptionist Text Agents'}
+                          AI Receptionist Voice Agents
                         </h4>
                         <p className="text-[11px] text-[#94A3B8]">
-                          {agentTypeFilter === 'voice' 
-                            ? 'Manage presets, deploy custom behavioral parameters, and test interactive speech flows' 
-                            : 'Manage chat widgets, custom chatbots, and automatic web-messaging parameters'}
+                          Manage presets, deploy custom behavioral parameters, and test interactive speech flows
                         </p>
                       </div>
                       
@@ -1390,7 +1403,7 @@ export default function Dashboard({
                         onClick={() => {
                           setNewAgent({
                             ...newAgent,
-                            type: agentTypeFilter
+                            type: 'voice'
                           });
                           setShowAgentModal(true);
                         }}
@@ -1400,35 +1413,15 @@ export default function Dashboard({
                       </motion.button>
                     </div>
 
-                    {/* Voice & Text Sub Tabs */}
-                    <div className="flex border-b border-[#1F2937] mb-6 gap-2">
-                      <button
-                        onClick={() => setAgentTypeFilter('voice')}
-                        className={`pb-3 px-4 relative cursor-pointer font-extrabold tracking-tight text-xs sm:text-sm transition-all ${
-                          agentTypeFilter === 'voice' ? 'text-[#3B82F6] border-b-2 border-[#3B82F6]' : 'text-[#94A3B8] hover:text-gray-200'
-                        }`}
-                      >
-                        Voice Agents ({agents.filter(a => (a.type || 'voice') === 'voice').length})
-                      </button>
-                      <button
-                        onClick={() => setAgentTypeFilter('text')}
-                        className={`pb-3 px-4 relative cursor-pointer font-extrabold tracking-tight text-xs sm:text-sm transition-all ${
-                          agentTypeFilter === 'text' ? 'text-[#3B82F6] border-b-2 border-[#3B82F6]' : 'text-[#94A3B8] hover:text-gray-200'
-                        }`}
-                      >
-                        Text Agents ({agents.filter(a => a.type === 'text').length})
-                      </button>
-                    </div>
-
                     {/* Agents Table List - Full Width */}
                     <div className="overflow-x-auto rounded-xl border border-[#1F2937]">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
                           <tr className="bg-[#020617] text-[#94A3B8] border-b border-[#1F2937]">
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Agent Profile</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">{agentTypeFilter === 'voice' ? 'Voice Model' : 'Type'}</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Voice Model</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px]">Personality</th>
-                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">{agentTypeFilter === 'voice' ? 'Interruption Sensitivity' : 'Response Delay'}</th>
+                            <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Interruption Sensitivity</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Status</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Quick Active Status</th>
                             <th className="p-4 font-bold uppercase tracking-wider text-[10px] text-center">Actions</th>
@@ -1438,7 +1431,7 @@ export default function Dashboard({
                           {filteredAgents.length === 0 ? (
                             <tr>
                               <td colSpan={7} className="p-12 text-center text-[#94A3B8] italic bg-[#020617]/30">
-                                No {agentTypeFilter} agents configured. Click "Add New Agent" to create one.
+                                No voice agents configured. Click "Add New Agent" to create one.
                               </td>
                             </tr>
                           ) : (
@@ -1454,11 +1447,7 @@ export default function Dashboard({
                                       <div className={`w-7.5 h-7.5 rounded-full flex items-center justify-center transition-colors ${
                                         agt.isActive ? 'bg-[#3B82F6]/20 text-[#3B82F6] border border-[#3B82F6]/30' : 'bg-[#111827] text-[#94A3B8] border border-[#1F2937]'
                                       }`}>
-                                        {agt.type === 'text' ? (
-                                          <MessageSquare className="w-4 h-4" />
-                                        ) : (
-                                          <Volume2Icon className="w-4 h-4" />
-                                        )}
+                                        <Volume2Icon className="w-4 h-4" />
                                       </div>
                                       <div>
                                         <span className="font-extrabold block text-white text-sm">{agt.name}</span>
@@ -1467,14 +1456,14 @@ export default function Dashboard({
                                     </div>
                                   </td>
                                   <td className="p-4 font-mono text-gray-300">
-                                    {agt.type === 'text' ? 'Web Chat Widget' : agt.voice}
+                                    {agt.voice}
                                   </td>
                                   <td className="p-4 text-gray-300 font-medium">
                                     {agt.personality}
                                   </td>
                                   <td className="p-4 text-center">
                                     <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-[#020617] border border-[#1F2937] text-gray-300">
-                                      {agt.type === 'text' ? 'Instant (<0.5s)' : agt.interruptionSensitivity}
+                                      {agt.interruptionSensitivity}
                                     </span>
                                   </td>
                                   <td className="p-4 text-center">
@@ -1491,10 +1480,18 @@ export default function Dashboard({
                                     {/* Beautiful Toggle Switch */}
                                     <div className="flex items-center justify-center">
                                       <button 
-                                        onClick={(e) => {
+                                        onClick={async (e) => {
                                           e.stopPropagation();
-                                          const updated = agents.map(a => a.id === agt.id ? { ...a, isActive: !a.isActive } : a);
-                                          onUpdateAgents(updated);
+                                          try {
+                                            const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+                                            const targetAgent = { ...agt, isActive: !agt.isActive };
+                                            const saved = await supabaseService.saveAgent(userId, targetAgent);
+                                            const updated = agents.map(a => a.id === agt.id ? saved : a);
+                                            onUpdateAgents(updated);
+                                          } catch (err: any) {
+                                            console.error('Error toggling agent state:', err);
+                                            alert('Failed to toggle agent state: ' + err.message);
+                                          }
                                         }}
                                         className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
                                           agt.isActive ? 'bg-[#3B82F6]' : 'bg-gray-800 border border-[#1F2937]'
@@ -1767,9 +1764,18 @@ export default function Dashboard({
                           <motion.button 
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={() => {
-                              alert("Configurations updated and deployed successfully!");
-                              setAgentSubTab('list');
+                            onClick={async () => {
+                              try {
+                                const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+                                const saved = await supabaseService.saveAgent(userId, selectedAgentForStudio);
+                                const updated = agents.map(a => a.id === selectedAgentForStudio.id ? saved : a);
+                                onUpdateAgents(updated);
+                                alert("Configurations updated, saved to Supabase, and deployed successfully!");
+                                setAgentSubTab('list');
+                              } catch (err: any) {
+                                console.error('Error saving agent configurations:', err);
+                                alert('Error saving configurations: ' + err.message);
+                              }
                             }}
                             className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl cursor-pointer shadow-md shadow-[#3B82F6]/25 transition-all"
                           >
@@ -1803,7 +1809,7 @@ export default function Dashboard({
                       {/* Editing Fields Form */}
                       <div className="space-y-6 mt-6 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-800">
                         
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                           <div>
                             <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Agent Name *</label>
                             <input 
@@ -1815,24 +1821,11 @@ export default function Dashboard({
                           </div>
 
                           <div>
-                            <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Agent Type</label>
-                            <select 
-                              value={editingAgent.type || 'voice'}
-                              onChange={(e) => setEditingAgent({ ...editingAgent, type: e.target.value as any })}
-                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
-                            >
-                              <option value="voice">Voice Agent</option>
-                              <option value="text">Text Agent</option>
-                            </select>
-                          </div>
-
-                          <div>
                             <label className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-mono block mb-1.5">Interruption Sensitivity</label>
                             <select 
                               value={editingAgent.interruptionSensitivity}
-                              disabled={(editingAgent.type || 'voice') === 'text'}
                               onChange={(e) => setEditingAgent({ ...editingAgent, interruptionSensitivity: e.target.value as any })}
-                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-full bg-[#020617] border border-[#1F2937] text-xs text-[#94A3B8] rounded-xl px-4 py-2.5 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
                             >
                               <option value="Low">Low - Interruption disabled</option>
                               <option value="Medium">Medium - Balanced natural turns</option>
@@ -1940,13 +1933,20 @@ export default function Dashboard({
                         <motion.button 
                           whileHover={{ scale: 1.03 }}
                           whileTap={{ scale: 0.97 }}
-                          onClick={() => {
+                          onClick={async () => {
                             if (!editingAgent.name) return;
-                            const updated = agents.map(a => a.id === editingAgent.id ? editingAgent : a);
-                            onUpdateAgents(updated);
-                            setAgentSubTab('list');
-                            setEditingAgent(null);
-                            alert("Agent edits saved successfully!");
+                            try {
+                              const userId = localStorage.getItem('vd_current_user_id') || 'usr-demo';
+                              const saved = await supabaseService.saveAgent(userId, editingAgent);
+                              const updated = agents.map(a => a.id === editingAgent.id ? saved : a);
+                              onUpdateAgents(updated);
+                              setAgentSubTab('list');
+                              setEditingAgent(null);
+                              alert("Agent edits saved successfully!");
+                            } catch (err: any) {
+                              console.error('Error saving agent edits:', err);
+                              alert('Error saving agent edits: ' + err.message);
+                            }
                           }}
                           className="bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#3B82F6]/90 hover:to-[#8B5CF6]/90 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl cursor-pointer shadow-md shadow-[#3B82F6]/25 transition-all"
                         >
@@ -2643,26 +2643,13 @@ export default function Dashboard({
                 />
               </div>
 
-              <div>
-                <label className="text-[10px] text-[#94A3B8] uppercase font-mono block mb-1">Agent Type</label>
-                <select 
-                  value={newAgent.type || 'voice'}
-                  onChange={(e) => setNewAgent({ ...newAgent, type: e.target.value as any })}
-                  className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
-                >
-                  <option value="voice">Voice Agent</option>
-                  <option value="text">Text Agent</option>
-                </select>
-              </div>
- 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] text-[#94A3B8] uppercase font-mono block mb-1">Voice</label>
                   <select 
                     value={newAgent.voice}
-                    disabled={(newAgent.type || 'voice') === 'text'}
                     onChange={(e) => setNewAgent({ ...newAgent, voice: e.target.value })}
-                    className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
                   >
                     <option value="Alloy - Neutral">Alloy - Neutral</option>
                     <option value="Alloy - Friendly & Warm">Alloy - Friendly & Warm</option>
@@ -2688,9 +2675,8 @@ export default function Dashboard({
                 <label className="text-[10px] text-[#94A3B8] uppercase font-mono block mb-1">Interruption Sensitivity</label>
                 <select 
                   value={newAgent.interruptionSensitivity}
-                  disabled={(newAgent.type || 'voice') === 'text'}
                   onChange={(e) => setNewAgent({ ...newAgent, interruptionSensitivity: e.target.value as any })}
-                  className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-[#020617] border border-[#1F2937] text-xs text-gray-300 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-[#3B82F6] transition-all"
                 >
                   <option value="Low">Low - Interruption disabled</option>
                   <option value="Medium">Medium - Balanced natural turns</option>
